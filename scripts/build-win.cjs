@@ -13,4 +13,7 @@ if(artwork.error)console.error(artwork.error.message);
 if(artwork.status!==0)process.exit(artwork.status??1);
 const result=spawnSync(process.execPath,[require.resolve('electron-builder/cli.js'),'--config','electron-builder.json','--win','nsis','--x64'],{cwd:root,env,stdio:'inherit',windowsHide:true});
 if(result.error)console.error(result.error.message);
-process.exit(result.status??1);
+if(result.status!==0)process.exit(result.status??1);
+const installerUI=spawnSync(path.join(process.env.WINDIR||'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe'),['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(root,'scripts','build-installer-ui.ps1')],{cwd:root,env,stdio:'inherit',windowsHide:true});
+if(installerUI.error)console.error(installerUI.error.message);
+process.exit(installerUI.status??1);

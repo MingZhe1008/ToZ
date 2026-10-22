@@ -1,10 +1,10 @@
-export function mountContextMenu({resolve,items,onCommand,icon=()=>''}){
+export function mountContextMenu({resolve,items,onCommand,icon=()=>'',onRootArrow}){
   const panel=(label,extra='')=>{const el=document.createElement('div');el.className='context-menu '+extra;el.role='menu';el.hidden=true;el.setAttribute('aria-label',label);document.body.append(el);return el;};
   const menu=panel('操作菜单'),submenu=panel('移动到分区','context-submenu');
   let target=null,origin=null,parentButton=null,hideTimer;
   const models=new WeakMap();
   const closeSubmenu=()=>{clearTimeout(hideTimer);submenu.hidden=true;parentButton?.setAttribute('aria-expanded','false');parentButton=null;};
-  const close=(focus=false)=>{closeSubmenu();menu.hidden=true;target=null;if(focus&&origin?.isConnected)origin.focus({preventScroll:true});};
+  const close=(focus=false)=>{closeSubmenu();menu.hidden=true;target=null;origin?.setAttribute('aria-expanded','false');if(focus&&origin?.isConnected)origin.focus({preventScroll:true});};
   function addButton(root,item){
     if(item.separator){const divider=document.createElement('div');divider.className='context-menu-separator';divider.role='separator';root.append(divider);return;}
     const button=document.createElement('button');button.type='button';button.role=item.checked===undefined?'menuitem':item.type==='checkbox'?'menuitemcheckbox':'menuitemradio';button.dataset.contextCommand=item.key;button.setAttribute('aria-label',item.label);button.title=item.label;button.disabled=!!item.disabled;models.set(button,item);
@@ -33,6 +33,7 @@ export function mountContextMenu({resolve,items,onCommand,icon=()=>''}){
   }
   const open=(entity,x,y,source)=>{
     close();target=entity;origin=source;
+    if(entity.kind==='menubar')source?.setAttribute('aria-expanded','true');
     const title=document.createElement('div');title.className='context-menu-title';title.textContent=entity.label;menu.replaceChildren(title);
     for(const item of items(entity))addButton(menu,item);
     menu.hidden=false;menu.style.left='0px';menu.style.top='0px';
@@ -58,6 +59,7 @@ export function mountContextMenu({resolve,items,onCommand,icon=()=>''}){
   document.addEventListener('keydown',event=>{
     if(!menu.hidden){
       const inSubmenu=submenu.contains(document.activeElement),active=document.activeElement;
+      if(!inSubmenu&&target?.kind==='menubar'&&['ArrowLeft','ArrowRight'].includes(event.key)&&!models.get(active)?.children){event.preventDefault();event.stopImmediatePropagation();onRootArrow?.(origin,event.key==='ArrowLeft'?-1:1);return;}
       if(event.key==='Escape'||event.key==='ArrowLeft'&&inSubmenu){
         event.preventDefault();event.stopImmediatePropagation();if(inSubmenu){const parent=parentButton;closeSubmenu();parent?.focus({preventScroll:true});}else close(true);return;
       }

@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('toz', {
-  surface: process.argv.includes('--toz-quick-add') ? 'quick-add' : process.argv.includes('--toz-widget') ? 'widget' : 'main',
+  surface: process.argv.includes('--toz-settings') ? 'settings' : process.argv.includes('--toz-quick-add') ? 'quick-add' : process.argv.includes('--toz-widget') ? 'widget' : 'main',
   smoke: process.argv.includes('--toz-smoke'),
   read: () => ipcRenderer.sendSync('toz:read'),
   commit: (snapshot, version) => ipcRenderer.sendSync('toz:commit', {snapshot,version}),
