@@ -12,7 +12,7 @@ export function mountReorder({onMove,onReady=()=>{}}){
   }
   const restoreFocus=(source,scope)=>{const root=scope?document.getElementById(scope):document;[...root.querySelectorAll(selector)].find(el=>el.dataset.reorderKind===source.dataset.reorderKind&&el.dataset.reorderId===source.dataset.reorderId)?.focus({preventScroll:true});};
   document.addEventListener('pointerdown',event=>{
-    if(event.button!==0||event.target.closest('input,textarea,select,[contenteditable],.subtask,.context-menu,.check-button,.calendar-check,[data-action="task-pin"],[data-action="toggle-subtasks"],.row-reschedule,[data-gantt="complete"],[data-gantt="pin"],[data-gantt="schedule"]'))return;
+    if(event.button!==0||event.target.closest('input,textarea,select,[contenteditable],.subtask,.context-menu,.check-button,.calendar-check,[data-action="task-pin"],[data-action="toggle-subtasks"],[data-action="toggle-repeat-instances"],.row-reschedule,[data-gantt="complete"],[data-gantt="pin"],[data-gantt="schedule"]'))return;
     const source=event.target.closest(selector);if(!source)return;
     clear();pending={x:event.clientX,y:event.clientY,pointer:event.pointerId,source,timer:setTimeout(()=>{
       try{source.setPointerCapture(event.pointerId);}catch{}
