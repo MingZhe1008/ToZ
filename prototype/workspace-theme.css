@@ -76,3 +76,7 @@ dialog,[data-theme=dark] dialog{background:var(--paper);color:var(--ink);border-
 .desktop-settings .button.secondary{font-size:13px;padding:8px 12px;flex-shrink:0}
 .desktop-settings .settings-footnote{font-size:12px;line-height:1.8;margin-top:22px}
 @media(max-width:740px){.desktop-settings .settings-layout{grid-template-columns:156px minmax(0,1fr)}.desktop-settings #settings-dialog .dialog-body{padding:24px 20px}.desktop-settings .settings-window-hint{display:none!important}.desktop-settings .setting-row{padding:14px;gap:10px}}
+
+/* Match the three command labels to the titlebar widget toggle. */
+.desktop-main .application-menubar button:not(:first-child),.desktop-main .desktop-titlebar>button[data-action="toggle-widget"]{font-family:inherit;font-size:11px;font-weight:400;line-height:normal;color:var(--muted)}
+.desktop-main .application-menubar button:not(:first-child):hover,.desktop-main .application-menubar button:not(:first-child)[aria-expanded=true]{color:var(--accent)}
