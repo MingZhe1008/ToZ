@@ -97,7 +97,7 @@ export function materializeSeries(series,tasks,through=addDays(TODAY,45),today=T
       const key=`${s.id}/${date}`;if(keys.has(key))continue;
       if(tasks.length+added.length>=50000)throw new Error('周期生成超过任务数量上限，请缩小日期范围');
       const due=addDays(date,s.span);if(!validDate(due))throw new Error('周期完成日期超出有效范围');
-      added.push({id:`repeat:${s.id}:${date}`,title:s.title,note:s.note,project:s.project,planStart:date,plan:due,initialPlan:due,started:null,done:false,top:true,completedDate:null,subtasks:[],repeatId:s.id,repeatDate:date,events:[{id:uid(),type:'create',date:today,at:new Date().toISOString(),reason:`周期安排 · ${recurrenceLabel(s)}`} ]});keys.add(key);
+      added.push({id:`repeat:${s.id}:${date}`,title:s.title,note:s.note,project:s.project,planStart:date,plan:due,initialPlan:due,started:null,done:false,top:false,completedDate:null,subtasks:[],repeatId:s.id,repeatDate:date,events:[{id:uid(),type:'create',date:today,at:new Date().toISOString(),reason:`周期安排 · ${recurrenceLabel(s)}`} ]});keys.add(key);
     }
   }
   return added;

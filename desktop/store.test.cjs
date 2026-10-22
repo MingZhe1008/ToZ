@@ -10,16 +10,16 @@ const {createTask}=require('../prototype/domain.mjs');
 function fixture(){const id=crypto.randomUUID();return {id,title:'测试离线任务',project:'ToZ',note:'记录延期历史',plan:'2026-10-20',initialPlan:'2026-10-20',started:null,done:false,completedDate:null,subtasks:[],events:[{id:crypto.randomUUID(),type:'create',date:'2026-10-20',at:'2026-10-20T08:00:00Z'}]};}
 function setup(t){const directory=fs.mkdtempSync(path.join(os.tmpdir(),'toz-test-'));const store=new Store(directory);t.after(()=>{try{store.close();}catch{}if(path.dirname(directory)===os.tmpdir()&&path.basename(directory).startsWith('toz-test-'))fs.rmSync(directory,{recursive:true,force:true});});return store;}
 
-test('补齐周期默认置顶并插入已有排序前，保留取消置顶与旧任务缺省选择，重启后保留',t=>{
+test('补齐周期默认不置顶，保留手动置顶与旧任务缺省选择，重启后保留',t=>{
   const store=setup(t),state=store.snapshot(),old=fixture();
   const series=createSeries(createTask('补齐置顶','2026-10-20','ToZ','','2026-10-20'),{unit:'day',interval:1},'2026-10-23');
-  const [first]=materializeSeries([series],[],'2026-10-20');first.top=false;
+  const [first]=materializeSeries([series],[],'2026-10-20');first.top=true;
   state.recurrences=[series];state.tasks=[old,first];state.preferences.taskOrder=[old.id,first.id];store.commit(state,0);
   store.ensureRecurring('2026-10-22');const saved=store.snapshot(),added=saved.tasks.filter(t=>t.id!==old.id&&t.id!==first.id);
-  assert(added.length>0&&added.every(t=>t.top));
+  assert(added.length>0&&added.every(t=>t.top===false));
   assert.deepEqual(saved.preferences.taskOrder,[...added.map(t=>t.id),old.id,first.id]);
-  assert.equal(saved.tasks.find(t=>t.id===first.id).top,false);assert.equal(saved.tasks.find(t=>t.id===old.id).top,undefined);
-  const reopened=new Store(store.directory);assert.deepEqual(reopened.snapshot().preferences.taskOrder,saved.preferences.taskOrder);assert.equal(reopened.snapshot().tasks.find(t=>t.id===first.id).top,false);reopened.close();
+  assert.equal(saved.tasks.find(t=>t.id===first.id).top,true);assert.equal(saved.tasks.find(t=>t.id===old.id).top,undefined);
+  const reopened=new Store(store.directory);assert.deepEqual(reopened.snapshot().preferences.taskOrder,saved.preferences.taskOrder);assert.equal(reopened.snapshot().tasks.find(t=>t.id===first.id).top,true);reopened.close();
 });
 test('彻底删除独立事务清除任务与 SQL 足迹，子任务清除保留父任务历史，重启生效',t=>{
   const {deleteTask,deleteSubtask}=require('../prototype/lifecycle.mjs'),store=setup(t),snapshot=store.snapshot(),gone=fixture(),keep=fixture();keep.subtasks=[{id:'child',title:'删除子项',done:false}];snapshot.tasks=[gone,keep];store.commit(snapshot,0);

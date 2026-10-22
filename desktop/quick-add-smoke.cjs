@@ -52,11 +52,11 @@ module.exports=async function quickAddSmoke({store,mainWindow,widgetWindow,getQu
     check(!store.snapshot().tasks.some(t=>t.title==='浮窗直接创建验收')&&await js(window,`document.querySelector('#new-dialog').open&&!!document.querySelector('#new-form .form-error').textContent&&document.querySelector('#new-form').elements.title.value==='浮窗直接创建验收'`),'版本冲突保留草稿并阻止重复或覆盖写入');
     await submit(window);await waitFor(()=>!getQuickAdd());await pause();
     const saved=store.snapshot(),task=saved.tasks.find(t=>t.title==='浮窗直接创建验收');
-    check(task?.top&&saved.preferences.taskOrder[0]===task.id,'快速新增保存后默认置顶且排在最前');
+    check(task?.top===false&&saved.preferences.taskOrder[0]===task.id,'快速新增保存后不自动置顶，保留新增排序记录');
     check(saved.tasks.filter(t=>t.title===task.title).length===1,'冲突重试只创建一份任务');
-    check(await js(widgetWindow,`document.querySelector('.widget-list .widget-row')?.dataset.task===${JSON.stringify(task.id)}`),'新增任务立即同步浮窗并排在首位');
+    check(await js(widgetWindow,`[...document.querySelectorAll('.widget-list .widget-row')].some(row=>row.dataset.task===${JSON.stringify(task.id)})`),'新增任务立即同步浮窗');
     mainWindow.webContents.send('toz:ui-command',{action:'today'});await pause();
-    check(await js(mainWindow,`document.querySelector('#task-list .task-row')?.dataset.task===${JSON.stringify(task.id)}`),'主界面隐藏时也收到新增和置顶顺序');
+    check(await js(mainWindow,`[...document.querySelectorAll('#task-list .task-row')].some(row=>row.dataset.task===${JSON.stringify(task.id)})`),'主界面隐藏时也收到新增任务');
     window=await open();const version=store.snapshot().version;
     window.webContents.sendInputEvent({type:'keyDown',keyCode:'Escape'});
     window.webContents.sendInputEvent({type:'keyUp',keyCode:'Escape'});
@@ -66,7 +66,7 @@ module.exports=async function quickAddSmoke({store,mainWindow,widgetWindow,getQu
     await js(window,`(() => {const form=document.querySelector('#new-form');form.elements.title.value='每月十日点性验收';form.elements.startDate.value=${JSON.stringify(month+'-10')};form.elements.date.value=${JSON.stringify(month+'-12')};form.elements.repeatPreset.value='monthly';form.elements.repeatPreset.dispatchEvent(new Event('change',{bubbles:true}));form.requestSubmit();})()`);
     await waitFor(()=>!getQuickAdd());
     let recurring=store.snapshot(),instances=recurring.tasks.filter(t=>t.title==='每月十日点性验收');
-    check(instances.length>=2&&instances.every(t=>t.top&&t.repeatDate.endsWith('-10')),'独立窗口可新增每月周期且每期默认置顶');
+    check(instances.length>=2&&instances.every(t=>t.top===false&&t.repeatDate.endsWith('-10')),'独立窗口可新增每月周期且每期默认不置顶');
     const instance=recurring.tasks.find(t=>t.id===instances[0].id);
     const {startTask,reschedule,addDays}=require('../prototype/domain.mjs');
     startTask(instance);reschedule(instance,addDays(instance.plan,40));store.commit(recurring,recurring.version);broadcast();await pause();
@@ -76,7 +76,7 @@ module.exports=async function quickAddSmoke({store,mainWindow,widgetWindow,getQu
     mainWindow.webContents.send('toz:ui-command',{action:'new'});await pause();
     await js(mainWindow,`document.querySelector('#new-form').elements.title.value='主界面新建置顶验收';document.querySelector('#new-form').requestSubmit()`);await pause();
     const mainTask=store.snapshot().tasks.find(t=>t.title==='主界面新建置顶验收');
-    check(mainTask?.top&&store.snapshot().preferences.taskOrder[0]===mainTask.id,'主界面新建同样默认置顶并插入首位');
+    check(mainTask?.top===false&&store.snapshot().preferences.taskOrder[0]===mainTask.id,'主界面新建同样不自动置顶，保留新增排序记录');
     check(!mainWindow.isVisible()&&mainShows===0,'新增与取消全程没有显示主窗口');
     // Reveal only after the hidden-main workflow checks. Hidden capture may reuse
     // a previous compositor frame even when the calendar DOM is up to date.
