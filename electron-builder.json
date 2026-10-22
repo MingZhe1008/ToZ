@@ -21,6 +21,9 @@
     "installerLanguages":["zh_CN","en_US"],
     "language":"2052",
     "include":"build/installer.nsh",
+    "installerHeader":".runtime/installer-assets/header.bmp",
+    "installerSidebar":".runtime/installer-assets/sidebar.bmp",
+    "uninstallerSidebar":".runtime/installer-assets/sidebar.bmp",
     "artifactName":"ToZ-Setup-${version}-x64.exe"
   }
 }

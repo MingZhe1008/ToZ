@@ -4,9 +4,12 @@ const path=require('node:path');
 const {Store}=require('./store.cjs');
 const {createStartup}=require('./startup.cjs');
 const {resizeWidgetHeight}=require('./widget-size.cjs');
+const {widgetMenuTemplate}=require('./widget-menu.cjs');
 const APP_ID='com.toz.desktop';
-const smoke=process.argv.includes('--smoke-test');
+const uiReview=process.argv.includes('--ui-v1-test');
+const smoke=process.argv.includes('--smoke-test')||uiReview;
 const dataArg=process.argv.find(a=>a.startsWith('--toz-data='));
+if(uiReview&&(!dataArg||!path.resolve(dataArg.slice(11)).startsWith(path.resolve('.runtime')+path.sep)))throw new Error('界面定向验收必须使用工作目录 .runtime 下的独立数据目录');
 if(dataArg)app.setPath('userData',path.resolve(dataArg.slice(11)));
 app.setName('ToZ');app.setAppUserModelId(APP_ID);
 let mainWindow,widgetWindow,quickAddWindow,tray,store,startup,quitting=false,widgetIgnore=false;
@@ -21,8 +24,8 @@ if(!lock){app.quit();}else{
 }
 function startupState(){return startup.state();}
 function showMain(command){if(!mainWindow)return;if(mainWindow.isMinimized())mainWindow.restore();mainWindow.show();mainWindow.focus();if(command)mainWindow.webContents.send('toz:ui-command',command);}
-function titleBarTheme(dark){return {color:dark?'#252528':'#f2f2f7',symbolColor:dark?'#f5f5f7':'#1d1d1f',height:34};}
-function applyTheme(){const dark=store.snapshot().dark;for(const window of [mainWindow,quickAddWindow])if(window&&!window.isDestroyed()){window.setBackgroundColor(dark?'#1c1c1e':'#ffffff');window.setTitleBarOverlay(titleBarTheme(dark));}}
+function titleBarTheme(dark){return {color:dark?'#252527':'#f8f8f7',symbolColor:dark?'#f0f0f2':'#252527',height:38};}
+function applyTheme(){const dark=store.snapshot().dark;for(const window of [mainWindow,quickAddWindow])if(window&&!window.isDestroyed()){window.setBackgroundColor(dark?'#29292c':'#ffffff');window.setTitleBarOverlay(titleBarTheme(dark));}}
 function broadcast(){applyTheme();const snapshot=store.snapshot();for(const w of [mainWindow,widgetWindow,quickAddWindow])if(w&&!w.isDestroyed())w.webContents.send('toz:state',snapshot);}
 function secure(window){window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('file:'))event.preventDefault();});}
 function fitBounds(bounds,fallback){
@@ -64,7 +67,7 @@ async function openQuickAdd(date){
   const x=Math.max(area.x,Math.min(anchor.x-width-12,area.x+area.width-width));
   const y=Math.max(area.y,Math.min(anchor.y,area.y+area.height-height));
   const dark=store.snapshot().dark;
-  const window=new BrowserWindow({x,y,width,height,minWidth:360,minHeight:420,title:'新建待办 · ToZ',titleBarStyle:'hidden',titleBarOverlay:titleBarTheme(dark),icon:iconPath,show:false,autoHideMenuBar:true,backgroundColor:dark?'#1c1c1e':'#f9f9fb',alwaysOnTop:store.settings().widgetPinned,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,additionalArguments:[...(smoke?['--toz-smoke']:[]),'--toz-quick-add']}});
+  const window=new BrowserWindow({x,y,width,height,minWidth:360,minHeight:420,title:'新建待办 · ToZ',titleBarStyle:'hidden',titleBarOverlay:titleBarTheme(dark),icon:iconPath,show:false,autoHideMenuBar:true,backgroundColor:dark?'#29292c':'#ffffff',alwaysOnTop:store.settings().widgetPinned,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,additionalArguments:[...(smoke?['--toz-smoke']:[]),'--toz-quick-add']}});
   quickAddWindow=window;secure(window);
   window.on('closed',()=>{if(quickAddWindow===window)quickAddWindow=null;rendererReports.delete('quick-add');});
   try{await window.loadFile(path.join(__dirname,'..','prototype','index.html'),{query:{date:date||''}});}
@@ -76,7 +79,7 @@ function applyWidget(){const settings=store.settings();widgetWindow.setAlwaysOnT
 function rebuildTray(){if(!tray)return;const settings=store.settings();tray.setContextMenu(Menu.buildFromTemplate([
   {label:'打开 ToZ',click:()=>showMain()},
   {label:settings.widgetVisible?'隐藏桌面浮窗':'显示桌面浮窗',click:()=>{store.updateSettings({widgetVisible:!settings.widgetVisible});applyWidget();rebuildTray();broadcast();}},
-  {label:'浮窗置顶',type:'checkbox',checked:settings.widgetPinned,click:item=>{store.updateSettings({widgetPinned:item.checked});applyWidget();broadcast();}},
+  {label:'窗口始终置顶',type:'checkbox',checked:settings.widgetPinned,click:item=>{store.updateSettings({widgetPinned:item.checked});applyWidget();broadcast();}},
   {label:'解除鼠标穿透',enabled:widgetIgnore,click:()=>setIgnore(false)},
   {type:'separator'},{label:'设置',click:()=>showMain({action:'settings'})},{label:'打开数据目录',click:()=>shell.openPath(store.directory)},
   {type:'separator'},{label:'退出 ToZ',click:()=>app.quit()}
@@ -112,6 +115,16 @@ function handlers(){
       case 'smoke-ready':if(smoke){rendererReports.set(arg.surface,arg);if(arg.surface==='widget'&&arg.collapsed&&arg.miniTask)miniSamples.add(arg.miniTask);}return true;
       case 'open-main':showMain(arg);return true;
       case 'open-quick-add':return openQuickAdd(arg?.date);
+      case 'widget-menu':{
+        const settings=store.settings();
+        Menu.buildFromTemplate(widgetMenuTemplate(settings,widgetIgnore,{
+          add:()=>openQuickAdd(),collapse:()=>setWidgetCollapsed(!store.settings().widgetCollapsed),
+          pin:checked=>{store.updateSettings({widgetPinned:checked});applyWidget();rebuildTray();broadcast();},
+          through:setIgnore,appearance:()=>showMain({action:'settings',tab:'appearance'}),
+          settings:()=>showMain({action:'settings',tab:'startup'}),main:()=>showMain()
+        })).popup({window:widgetWindow});
+        return true;
+      }
       case 'close-quick-add':quickAddWindow?.close();return true;
       case 'toggle-widget':toggleWidget();return true;
       case 'show-widget':store.updateSettings({widgetVisible:true});setIgnore(false);applyWidget();widgetWindow.showInactive();widgetWindow.moveTop();rebuildTray();broadcast();return true;
@@ -148,6 +161,15 @@ async function start(){
   if(!smoke){tray=new Tray(nativeImage.createFromPath(iconPath).resize({width:20,height:20}));tray.setToolTip('ToZ · 离线待办');tray.on('double-click',()=>showMain());rebuildTray();globalShortcut.register('CommandOrControl+Alt+T',()=>{setIgnore(false);store.updateSettings({widgetVisible:true});applyWidget();});}
   app.on('before-quit',()=>{quitting=true;});
   app.on('will-quit',()=>{globalShortcut.unregisterAll();store.close();});
+  if(uiReview){
+    const resultPath=path.resolve(smokeResult||'artifacts/ui-v1/result.json');fs.mkdirSync(path.dirname(resultPath),{recursive:true});
+    try{
+      await Promise.all([mainWindow,widgetWindow].map(w=>w.webContents.isLoading()?new Promise(resolve=>w.webContents.once('did-finish-load',resolve)):null));
+      const result=await require('./ui-v1-smoke.cjs')({store,mainWindow,widgetWindow,getQuickAdd:()=>quickAddWindow,broadcast,outputDirectory:path.dirname(resultPath)});
+      fs.writeFileSync(resultPath,JSON.stringify({version:app.getVersion(),ok:true,...result},null,2));app.quit();
+    }catch(error){fs.writeFileSync(resultPath,JSON.stringify({version:app.getVersion(),ok:false,error:error.stack},null,2));app.exit(1);}
+    return;
+  }
   if(smoke){
     const errors=[];for(const w of [mainWindow,widgetWindow]){w.webContents.on('console-message',details=>{if(details.level==='error')errors.push(details.message);});w.webContents.on('render-process-gone',(_,details)=>errors.push(details.reason));}
     await Promise.all([mainWindow.webContents.isLoading()?new Promise(resolve=>mainWindow.webContents.once('did-finish-load',resolve)):null,widgetWindow.webContents.isLoading()?new Promise(resolve=>widgetWindow.webContents.once('did-finish-load',resolve)):null]);
