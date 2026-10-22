@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.runtime/
+artifacts/
+.learnings/
+.env
+.env.*
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.log

@@ -1,0 +1,26 @@
+{
+  "name": "toz",
+  "productName": "ToZ",
+  "description": "ToZ 离线待办与桌面透明浮窗",
+  "author": "ToZ",
+  "license": "UNLICENSED",
+  "main": "desktop/main.cjs",
+  "version": "0.4.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "desktop": "electron .",
+    "install:runtime": "node node_modules/electron/install.js",
+    "build:win": "node scripts/build-win.cjs",
+    "test": "node --test prototype/domain.test.mjs desktop/store.test.cjs desktop/startup.test.cjs prototype/gantt.test.mjs prototype/recurrence.test.mjs prototype/planning.test.mjs prototype/lifecycle.test.mjs prototype/trash.test.mjs",
+    "smoke": "electron . --smoke-test --toz-data=.runtime/smoke --smoke-result=artifacts/desktop-smoke/result.json"
+  },
+  "devDependencies": {
+    "7zip-bin": "5.2.0",
+    "electron": "44.9.1",
+    "electron-builder": "26.15.3",
+    "lunar-javascript": "1.7.7",
+    "rcedit": "5.0.2"
+  }
+}
