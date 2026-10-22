@@ -145,7 +145,7 @@ function toast(message) {
   toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 4200);
 }
 function hydrateIcons(root = document) { root.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = svg(el.dataset.icon)); }
-const names = { gantt:['甘特图','甘特图','从开始到完成，看清每一步。'], today: ['今天','今天，慢慢做好。','留一点专注，给真正重要的事。'], calendar: ['日历','把日子，慢慢填好。','按起止区间查看每天的安排。'], upcoming: ['即将到来','给未来，留好位置。','未来的安排，心里有数。'], all: ['全部任务','每一件事，都有位置。','有日期的计划，和还没排期的想法。'], delayed: ['延期记录','计划改变，痕迹还在。','每一次调整，都值得被理解。'], done: ['已完成','做过的事，都算数。','回头看看，你已经走了这么远。'] };
+const names = { gantt:['甘特图','甘特图','从开始到完成，看清每一步。'], today: ['今天','今天，慢慢做好。','留一点专注，给真正重要的事。'], calendar: ['日历','把日子，慢慢填好。','按起止区间查看每天的安排。'], upcoming: ['即将到来','给未来，留好位置。','重复任务仅显示最近一期，未来安排一眼看清。'], all: ['全部任务','每一件事，都有位置。','有日期的计划，和还没排期的想法。'], delayed: ['延期记录','计划改变，痕迹还在。','每一次调整，都值得被理解。'], done: ['已完成','做过的事，都算数。','回头看看，你已经走了这么远。'] };
 function viewTasks() {
   let result = tasks.filter(t=>!t.cancelled&&!t.deletedAt);
   if (view === 'today') result = todayTasks(tasks);

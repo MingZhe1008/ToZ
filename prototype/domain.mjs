@@ -58,7 +58,15 @@ export function todayTasks(tasks, date = TODAY) {
 }
 export function upcomingTasks(tasks, date = TODAY) {
   const active=new Set(todayTasks(tasks,date).map(t=>t.id));
-  return tasks.filter(t=>!t.cancelled&&!t.deletedAt&&!t.done&&!active.has(t.id)&&(t.planStart>date||t.plan>date));
+  const candidates=tasks.filter(t=>!t.cancelled&&!t.deletedAt&&!t.done&&!active.has(t.id)&&(t.planStart>date||t.plan>date));
+  const nearest=new Map();
+  const key=t=>[validDate(t.planStart)?t.planStart:t.plan,t.repeatDate||'',t.id].join('/');
+  for(const task of candidates){
+    if(!task.repeatId)continue;
+    const previous=nearest.get(task.repeatId);
+    if(!previous||key(task)<key(previous))nearest.set(task.repeatId,task);
+  }
+  return candidates.filter(t=>!t.repeatId||nearest.get(t.repeatId)===t);
 }
 // Planned start is editable; the first actual start remains an independent fact.
 // Legacy tasks without a planned start begin at their actual start or due date.
