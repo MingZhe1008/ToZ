@@ -8,13 +8,15 @@ import {calendarWeeks,tasksByDate,calendarTaskRange} from './calendar.mjs';
 import {preferences,sortedTasks,moveBefore,renameProject} from './preferences.mjs';
 const make=(start,unit,month,day,leap='regular',until=null)=>createSeries(createTask('农历安排',start,'ToZ','',start),{unit,interval:1,calendar:'lunar',lunar:{month,day,leap}},until);
 
-test('新建普通任务与周期期次默认置顶，取消置顶后生成不会覆盖已有选择',()=>{
-  const task=createTask('新任务','2026-10-20');assert.equal(task.top,true);
+test('新建普通任务与周期期次默认不置顶，后续生成不会覆盖手动置顶选择',()=>{
+  const task=createTask('新任务','2026-10-20');assert.equal(task.top,false);
   const series=createSeries({...task,planStart:'2026-10-20'},{unit:'day',interval:1});
-  const tasks=materializeSeries([series],[],'2026-10-22');assert(tasks.every(t=>t.top));
-  tasks[0].top=false;
+  const tasks=materializeSeries([series],[],'2026-10-22');assert(tasks.every(t=>t.top===false));
+  tasks[0].top=true;
   const added=materializeSeries([series],tasks,'2026-10-24');
-  assert(added.every(t=>t.top));assert.equal(tasks[0].top,false);
+  assert(added.every(t=>t.top===false));assert.equal(tasks[0].top,true);
+  const prefs=preferences({taskOrder:[task.id,tasks[0].id]},['个人','ToZ'],[task,tasks[0]]);
+  assert.equal(sortedTasks([task,tasks[0]],prefs.taskOrder)[0].id,tasks[0].id);
   assert(!added.some(t=>t.id===tasks[0].id));
 });
 
