@@ -3,13 +3,13 @@ import {createSeries,validateSeries,materializeSeries,recurrenceLabel,stopSeries
 import {lunarDate,lunarText,lunarDay} from './lunar.mjs';
 import {preferences,sortedTasks,moveBefore,renameProject} from './preferences.mjs';
 import {mountReorder} from './reorder.mjs';
-import {visibleSubtasks,activeProjects,editSubtask,deleteSubtask,deleteTask,restoreTask,restoreSubtask,deleteProject,restoreProject,moveTask} from './lifecycle.mjs';
+import {visibleSubtasks,activeProjects,addSubtask,editSubtask,deleteSubtask,deleteTask,restoreTask,restoreSubtask,deleteProject,restoreProject,moveTask} from './lifecycle.mjs';
 import {mountContextMenu} from './context-menu.mjs';
 import {purgeTrash} from './trash.mjs';
 import {eventTone} from './task-events.mjs';
 import { mountGantt } from './gantt.mjs';
 import { DEFAULT_PROJECTS, projectName, projectList, projectColor, setProjectColors } from './projects.mjs';
-import { TODAY, uid, seedTasks, createTask, reschedule, startTask, toggleDone, duration, postponements, shiftedDays, todayTasks, dayDiff, addDays, refreshToday, upcomingTasks, taskDateRange } from './domain.mjs';
+import { TODAY, uid, seedTasks, createTask, reschedule, startTask, toggleDone, duration, postponements, shiftedDays, todayTasks, dayDiff, addDays, refreshToday, upcomingTasks, taskDateRange, validDate } from './domain.mjs';
 import { monthDays, shiftMonth, tasksByDate, dayPreview, calendarWeeks, calendarTaskRange } from './calendar.mjs';
 import { mountDatePickers, syncDatePickers, closeDatePickers } from './date-picker.mjs';
 import { mountDesktopSettings, refreshDesktopSettings } from './desktop-ui.mjs';
@@ -180,7 +180,7 @@ function taskMeta(task, widget = false) {
   return out.join('<span class="meta-sep"></span>');
 }
 function inlineSubtasks(task,widget=false){
-  return `<div class="inline-subtasks" id="${widget?'widget':'inline'}-subtasks-${esc(task.id)}" data-action="subtasks-panel" ${(widget?expandedWidgetSubtasks:expandedSubtasks).has(task.id)?'':'hidden'} role="group" aria-label="${esc(task.title)}的子任务">${visibleSubtasks(task).map(sub=>`<div data-subtask-row="${esc(sub.id)}" ${taskIdAttr(task)} tabindex="0" class="subtask ${sub.done?'is-done':''}"><button class="check-button ${sub.done?'done':''}" data-action="subtask" ${taskIdAttr(task)} data-subtask="${esc(sub.id)}" aria-label="${sub.done?'重新打开':'完成'}${widget?'浮窗':'列表'}子任务：${esc(sub.title)}" aria-pressed="${sub.done}">${sub.done?svg('check'):''}</button><span class="subtask-name" title="双击修改名称">${esc(sub.title)}</span><button class="subtask-edit icon-button" data-action="edit-subtask" ${taskIdAttr(task)} data-subtask="${esc(sub.id)}" aria-label="编辑子任务：${esc(sub.title)}">${svg('sliders')}</button></div>`).join('')}</div>`;
+  return `<div class="inline-subtasks" id="${widget?'widget':'inline'}-subtasks-${esc(task.id)}" data-action="subtasks-panel" ${(widget?expandedWidgetSubtasks:expandedSubtasks).has(task.id)?'':'hidden'} role="group" aria-label="${esc(task.title)}的子任务">${visibleSubtasks(task).map(sub=>`<div data-subtask-row="${esc(sub.id)}" ${taskIdAttr(task)} tabindex="0" class="subtask ${sub.done?'is-done':''}"><button class="check-button ${sub.done?'done':''}" data-action="subtask" ${taskIdAttr(task)} data-subtask="${esc(sub.id)}" aria-label="${sub.done?'重新打开':'完成'}${widget?'浮窗':'列表'}子任务：${esc(sub.title)}" aria-pressed="${sub.done}">${sub.done?svg('check'):''}</button><span class="subtask-name" title="双击编辑名称与日期">${esc(sub.title)}${subtaskDates(sub)}</span><button class="subtask-edit icon-button" data-action="edit-subtask" ${taskIdAttr(task)} data-subtask="${esc(sub.id)}" aria-label="编辑子任务：${esc(sub.title)}">${svg('sliders')}</button></div>`).join('')}</div>`;
 }
 function taskRow(task, widget = false) {
   return `<div class="${widget ? 'widget-row' : 'task-row'} ${task.done ? 'completed' : ''} ${selected === task.id && !widget ? 'selected' : ''}" ${taskIdAttr(task)} ${reorderAttrs(task)} data-action="select" role="group" tabindex="0" title="长按拖动排序 · Alt + ↑ / ↓ 调整顺序" aria-label="${esc(task.title)}">
@@ -243,7 +243,7 @@ function renderCalendar() {
   renderMonthGrid();
 }
 function eventMarkup(event) {
-  const labels = {task_delete:'删除任务',task_restore:'恢复任务',subtask_rename:'修改子任务名称',subtask_delete:'删除子任务',subtask_restore:'恢复子任务',project_move:'移动分区',subtask_purge:'彻底删除子任务', plan_start:'调整计划开始日期', edit:'更新任务内容', later:'调整计划 · 延期', earlier:'调整计划 · 提前', schedule:'设置计划日期', start:'开始了这个任务', create:'创建任务', project_rename:'分区更名', complete:'完成任务', reopen:'重新打开任务', subtask:'更新子任务', subtask_add:'添加子任务',repeat_stop:'停止周期任务',cancel_repeat:'取消未来周期排期' };
+  const labels = {task_delete:'删除任务',task_restore:'恢复任务',subtask_rename:'修改子任务名称',subtask_schedule:'调整子任务日期',subtask_delete:'删除子任务',subtask_restore:'恢复子任务',project_move:'移动分区',subtask_purge:'彻底删除子任务', plan_start:'调整计划开始日期', edit:'更新任务内容', later:'调整计划 · 延期', earlier:'调整计划 · 提前', schedule:'设置计划日期', start:'开始了这个任务', create:'创建任务', project_rename:'分区更名', complete:'完成任务', reopen:'重新打开任务', subtask:'更新子任务', subtask_add:'添加子任务',repeat_stop:'停止周期任务',cancel_repeat:'取消未来周期排期' };
   const tone=eventTone(event);
   const isDate = ['later','earlier','schedule','plan_start'].includes(event.type);
   return `<div class="timeline-item ${esc(event.type)} tone-${tone}"><span class="timeline-point"></span><div class="timeline-copy"><div class="timeline-label"><span>${esc(labels[event.type] || '更新任务')}</span><time title="${esc(event.at)}">${shortDate(event.date)}${event.at ? ' · ' + new Date(event.at).toLocaleTimeString('zh-CN',{timeZone:'Asia/Shanghai',hour:'2-digit',minute:'2-digit',hour12:false}) : ''}</time></div>${isDate ? `<div class="timeline-dates">${dateText(event.from)} <span>→</span> ${dateText(event.to)}</div>` : ''}${event.reason ? `<div class="timeline-reason">${esc(event.reason)}</div>` : ''}</div></div>`;
@@ -261,7 +261,7 @@ function renderDetail() {
   <div class="date-fields"><div class="field-row"><span>${svg('calendar')}计划开始</span><b>${dateText(task.planStart)}</b></div><div class="field-row"><span>${svg('calendar')}最初计划完成</span><b>${dateText(task.initialPlan)}</b></div><div class="field-row"><span>${svg('calendar')}当前计划完成</span><b class="current">${dateText(task.plan)}${task.plan===TODAY?' · 今天':''}</b></div></div>
   <div class="detail-stats"><div><strong>${days===null?'—':days}</strong>${days===null?'':'<small>天</small>'}<label>${task.done?'完成历时':'已持续'}</label></div><div><strong>${count}</strong><small>次</small><label>计划延期</label></div><div><strong>${shiftedDays(task)}</strong><small>天</small><label>累计后移</label></div></div>
   <div class="detail-actions">${task.done ? `<button class="button primary" data-action="complete" ${taskIdAttr(task)}>${svg('history')}重新打开</button>` : `<button class="button primary" data-action="reschedule" ${taskIdAttr(task)}>${svg('calendar')}调整计划</button>${task.started ? `<button class="button secondary" data-action="complete" ${taskIdAttr(task)}>${svg('check')}完成任务</button>` : `<button class="button secondary" data-action="start" ${taskIdAttr(task)}>${svg('play')}开始任务</button>`}`}</div>
-  <section class="detail-section"><h3 class="section-heading">子任务 <small>${subs.filter(s=>s.done).length} / ${subs.length}</small></h3>${subs.map(s=>`<div data-subtask-row="${esc(s.id)}" ${taskIdAttr(task)} tabindex="0" class="subtask ${s.done?'is-done':''}"><button class="check-button ${s.done?'done':''}" data-action="subtask" ${taskIdAttr(task)} data-subtask="${esc(s.id)}" aria-label="${s.done?'重新打开':'完成'}子任务：${esc(s.title)}" aria-pressed="${!!s.done}">${s.done?svg('check'):''}</button><span class="subtask-name" title="双击修改名称">${esc(s.title)}</span><button class="subtask-edit icon-button" data-action="edit-subtask" ${taskIdAttr(task)} data-subtask="${esc(s.id)}" aria-label="编辑子任务：${esc(s.title)}">${svg('sliders')}</button></div>`).join('')}${!task.done ? `<form class="subtask-form" id="subtask-form"><input name="title" placeholder="添加子任务…" maxlength="120" required aria-label="新子任务标题"><button type="submit" title="添加子任务" aria-label="添加子任务">${svg('plus')}</button></form>` : ''}</section>
+  <section class="detail-section"><h3 class="section-heading">子任务 <small>${subs.filter(s=>s.done).length} / ${subs.length}</small></h3>${subs.map(s=>`<div data-subtask-row="${esc(s.id)}" ${taskIdAttr(task)} tabindex="0" class="subtask ${s.done?'is-done':''}"><button class="check-button ${s.done?'done':''}" data-action="subtask" ${taskIdAttr(task)} data-subtask="${esc(s.id)}" aria-label="${s.done?'重新打开':'完成'}子任务：${esc(s.title)}" aria-pressed="${!!s.done}">${s.done?svg('check'):''}</button><span class="subtask-name" title="双击编辑名称与日期">${esc(s.title)}${subtaskDates(s)}</span><button class="subtask-edit icon-button" data-action="edit-subtask" ${taskIdAttr(task)} data-subtask="${esc(s.id)}" aria-label="编辑子任务：${esc(s.title)}">${svg('sliders')}</button></div>`).join('')}${!task.done ? `<form class="subtask-form" id="subtask-form"><input name="title" placeholder="添加子任务…" maxlength="120" required aria-label="新子任务标题"><button type="button" data-action="new-subtask-dated" ${taskIdAttr(task)} title="设置子任务日期" aria-label="添加带日期的子任务">${svg('calendar')}</button><button type="submit" title="添加子任务" aria-label="添加子任务">${svg('plus')}</button></form><p class="subtask-add-hint">可直接添加，或点日历设置开始与截止日期。</p>` : ''}</section>
   <section class="detail-section"><h3 class="section-heading">任务足迹 <button data-action="history-filter" aria-pressed="${historyOnly}">${historyOnly?'显示全部':'仅看延期'} ↕</button></h3><div class="timeline">${events.map(eventMarkup).join('') || '<p class="timeline-reason">还没有延期记录。</p>'}</div></section>`;
 }
 function renderWidget() {
@@ -399,7 +399,9 @@ document.addEventListener('click',async event=>{
     case 'reschedule':if(task)openReschedule(task.id);break;
     case 'subtask':if(task)mutate(()=>{const sub=task.subtasks.find(s=>s.id===target.dataset.subtask);if(!sub)return;sub.done=!sub.done;if(task.done&&!sub.done)toggleDone(task);task.events.push({id:uid(),type:'subtask',done:sub.done,date:TODAY,at:new Date().toISOString(),reason:`${sub.done?'完成':'重新打开'}：${sub.title}`});},'子任务已更新');break;
     case 'more':{const entity=resolveContext(target);if(entity)contextMenu.openAt(target,entity);}break;
-    case 'delete-edit-subtask':if(subtaskEdit){const task=tasks.find(t=>t.id===subtaskEdit.taskId);mutate(()=>deleteSubtask(task,subtaskEdit.subId),'子任务已移入回收站');$('#subtask-edit-dialog').close();}break;
+    case 'clear-subtask-dates':$('#subtask-edit-form').elements.startDate.value='';$('#subtask-edit-form').elements.date.value='';syncDatePickers();break;
+    case 'new-subtask-dated':if(task)openSubtaskEdit(task.id,null,$('#subtask-form').elements.title.value);break;
+    case 'delete-edit-subtask':if(subtaskEdit?.subId){const task=tasks.find(t=>t.id===subtaskEdit.taskId);mutate(()=>deleteSubtask(task,subtaskEdit.subId),'子任务已移入回收站');$('#subtask-edit-dialog').close();}break;
     case 'history-filter':historyOnly=!historyOnly;renderDetail();break;
     case 'new':openNew(target.dataset.newDate);break;
     case 'edit':if(native?.surface==='widget')nativeCommand('open-main',{action:'edit',id:task?.id});else openEdit(task);break;
@@ -459,7 +461,7 @@ $('#reschedule-form').elements.date.addEventListener('input',updateRescheduleHin
 $('#reschedule-form').elements.startDate.addEventListener('input',updateRescheduleHint);
 document.addEventListener('submit',event=>{
   if(event.target.id!=='subtask-form')return;event.preventDefault();const form=event.target,title=form.elements.title.value.trim();if(!title)return;
-  const task=tasks.find(t=>t.id===selected);mutate(()=>{task.subtasks.push({id:uid(),title,done:false});task.events.push({id:uid(),type:'subtask_add',date:TODAY,at:new Date().toISOString(),reason:title});},'子任务已添加');
+  const task=tasks.find(t=>t.id===selected);mutate(()=>addSubtask(task,title),'子任务已添加');
 });
 $('#opacity-range').addEventListener('input',event=>{opacity=Number(event.target.value);document.documentElement.style.setProperty('--widget-alpha',opacity/100);$('#opacity-value').value=opacity+'%';});
 $('#opacity-range').addEventListener('change',save);
@@ -527,7 +529,7 @@ function resolveContext(element){
 function contextItems(entity){
   if(entity.kind==='project')return [{key:'edit-project',label:'编辑名称与颜色'},{key:'new-project',label:'新建分区'},{key:'delete-project',label:'删除分区…',danger:true}];
   const task=tasks.find(t=>t.id===entity.id);if(!task)return [];
-  if(entity.kind==='subtask'){const sub=task.subtasks.find(s=>s.id===entity.subId);return [{key:'edit-subtask',label:'编辑子任务名称'},{key:'toggle-subtask',label:sub.done?'重新打开子任务':'完成子任务'},{key:'delete-subtask',label:'删除子任务',danger:true}];}
+  if(entity.kind==='subtask'){const sub=task.subtasks.find(s=>s.id===entity.subId);return [{key:'edit-subtask',label:'编辑子任务'},{key:'toggle-subtask',label:sub.done?'重新打开子任务':'完成子任务'},{key:'delete-subtask',label:'删除子任务',danger:true}];}
   const out=[{key:'edit-task',label:'编辑任务'},{key:'move-project',label:'移动到分区',children:shownProjects().map(name=>({key:'move-project',label:name,value:name,color:projectColor(name),checked:task.project===name}))},{key:'pin',label:task.top?'取消置顶':'置顶任务'},{key:'complete',label:task.done?'重新打开任务':'完成任务'}];
   if(!task.done){if(!task.started)out.push({key:'start',label:'开始任务'});out.push({key:'reschedule',label:'调整计划…'},{key:'add-subtask',label:'添加子任务'});}
   if(recurrences.some(s=>s.id===task.repeatId&&s.active))out.push({key:'stop-repeat',label:'停止后续重复'});
@@ -550,10 +552,18 @@ function contextCommand(key,entity,value){
   if(key==='delete-task'){mutate(()=>deleteTask(task),'任务已移入回收站，可在侧栏恢复');return;}
   if(key==='stop-repeat'){const series=recurrences.find(s=>s.id===task.repeatId);if(series?.active)mutate(()=>{stopSeries(series,tasks);task.events.push({id:uid(),type:'repeat_stop',date:TODAY,at:new Date().toISOString(),reason:'停止后续重复，保留已产生的任务和足迹'});},'已停止后续重复');}
 }
-function openSubtaskEdit(taskId,subId){
+function subtaskDates(sub){return sub.planStart&&sub.plan?`<small class="subtask-dates">${esc(shortDate(sub.planStart))} → ${esc(shortDate(sub.plan))}</small>`:'';}
+function openSubtaskEdit(taskId,subId,draft=''){
   if(native?.surface==='widget'){nativeCommand('open-main',{action:'edit-subtask',id:taskId,subId});return;}
-  const task=tasks.find(t=>t.id===taskId&&!t.deletedAt),sub=task?.subtasks.find(s=>s.id===subId&&!s.deletedAt);if(!sub){toast('子任务已更新');return;}
-  subtaskEdit={taskId,subId};$('#subtask-parent-title').textContent=task.title;$('#subtask-edit-form').elements.title.value=sub.title;openDialog('#subtask-edit-dialog');
+  const task=tasks.find(t=>t.id===taskId&&!t.deletedAt),sub=task?.subtasks.find(s=>s.id===subId&&!s.deletedAt);
+  if(!task||(subId&&!sub)){toast('子任务已更新');return;}
+  subtaskEdit={taskId,subId};const form=$('#subtask-edit-form');form.reset();form.elements.title.value=sub?.title||draft;
+  $('#subtask-parent-title').textContent=task.title;$('#subtask-dialog-title').textContent=sub?'编辑子任务':'添加子任务';
+  form.querySelector('[type="submit"]').textContent=sub?'保存子任务':'添加子任务';form.querySelector('[data-action="delete-edit-subtask"]').hidden=!sub;
+  const bounded=validDate(task.planStart)&&validDate(task.plan);
+  $('#subtask-plan-hint').innerHTML=bounded?`主任务计划范围<span>开始：${esc(dateText(task.planStart))}</span><span>截止：${esc(dateText(task.plan))}</span>`:'主任务未设置完整计划起止。请先调整主任务计划，再安排子任务日期；也可添加不设日期的子任务。';
+  for(const [name,value] of [['startDate',sub?.planStart],['date',sub?.plan]]){const input=form.elements[name];input.value=value||'';input.min=bounded?task.planStart:'';input.max=bounded?task.plan:'';input.disabled=!bounded;}
+  openDialog('#subtask-edit-dialog');
 }
 function openDeleteProject(name){
   deleteProjectName=name;const form=$('#delete-project-form');form.reset();$('#delete-project-title').textContent=name+' · '+tasks.filter(t=>t.project===name&&!t.deletedAt&&!t.cancelled).length+' 项任务';
@@ -610,7 +620,7 @@ function initializeActions(){
   },true);
   contextMenu=mountContextMenu({resolve:resolveContext,items:contextItems,onCommand:contextCommand});
   document.addEventListener('dblclick',event=>{const row=event.target.closest('[data-subtask-row]');if(row&&!event.target.closest('button'))openSubtaskEdit(row.dataset.task,row.dataset.subtaskRow);});
-  $('#subtask-edit-form').addEventListener('submit',event=>{event.preventDefault();const form=event.currentTarget;try{const task=tasks.find(t=>t.id===subtaskEdit.taskId);editSubtask(task,subtaskEdit.subId,form.elements.title.value);if(!save()){form.querySelector('.form-error').textContent=saveError;return;}render();$('#subtask-edit-dialog').close();toast('子任务名称已更新');}catch(error){form.querySelector('.form-error').textContent=error.message;}});
+  $('#subtask-edit-form').addEventListener('submit',event=>{event.preventDefault();const form=event.currentTarget;try{const task=tasks.find(t=>t.id===subtaskEdit.taskId);const dates={planStart:form.elements.startDate.value||null,plan:form.elements.date.value||null};if(subtaskEdit.subId)editSubtask(task,subtaskEdit.subId,form.elements.title.value,dates);else addSubtask(task,form.elements.title.value,dates.planStart,dates.plan);if(!save()){form.querySelector('.form-error').textContent=saveError;return;}render();$('#subtask-edit-dialog').close();toast('子任务已保存');}catch(error){form.querySelector('.form-error').textContent=error.message;}});
   $('#delete-project-form').addEventListener('change',updateDeleteProjectHint);
   $('#delete-project-form').addEventListener('submit',event=>{event.preventDefault();const form=event.currentTarget;try{deleteProject(dataState(),deleteProjectName,{mode:form.elements.mode.value,target:form.elements.target.value||null});if(!save()){form.querySelector('.form-error').textContent=saveError;return;}if(view==='project:'+deleteProjectName)view='all';if(tasks.find(t=>t.id===selected)?.deletedAt)selected=tasks.find(t=>!t.deletedAt&&!t.cancelled)?.id||null;render();$('#delete-project-dialog').close();toast('分区已移入回收站');}catch(error){form.querySelector('.form-error').textContent=error.message;}});
   $('#trash-search').addEventListener('input',event=>{trashQuery=event.target.value;renderTrash();});

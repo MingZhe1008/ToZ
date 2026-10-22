@@ -1,4 +1,4 @@
-import {TODAY,uid,toggleDone} from './domain.mjs';
+import {TODAY,uid,toggleDone,validateSubtaskPlan} from './domain.mjs';
 
 const stamp=()=>new Date().toISOString();
 const record=(task,type,fields={})=>task.events.push({id:uid(),type,date:TODAY,at:stamp(),...fields});
@@ -11,11 +11,22 @@ export function moveTask(snapshot,id,target){
   if(task.project===target)return false;
   const from=task.project;task.project=target;record(task,'project_move',{fromProject:from,toProject:target,reason:from+' → '+target});return true;
 }
-export function editSubtask(task,id,value){
+export function addSubtask(task,value,planStart=null,plan=null){
+  if(!task||task.deletedAt||task.done)throw new Error('请先重新打开有效主任务');
+  const title=value.trim();if(!title||title.length>120)throw new Error('子任务名称应为 1–120 个字符');
+  validateSubtaskPlan(task,planStart,plan);
+  const sub={id:uid(),title,done:false,planStart,plan};task.subtasks.push(sub);
+  record(task,'subtask_add',{subId:sub.id,planStart,plan,reason:title+(planStart?' · '+planStart+' → '+plan:'')});return sub;
+}
+export function editSubtask(task,id,value,dates){
   const sub=task.subtasks.find(s=>s.id===id&&!s.deletedAt);if(!sub||task.deletedAt)throw new Error('子任务不存在或已删除');
   const title=value.trim();if(!title||title.length>120)throw new Error('子任务名称应为 1–120 个字符');
-  if(title===sub.title)return false;
-  record(task,'subtask_rename',{subId:id,fromTitle:sub.title,toTitle:title,reason:sub.title+' → '+title});sub.title=title;return true;
+  const start=dates?dates.planStart||null:sub.planStart||null,end=dates?dates.plan||null:sub.plan||null;
+  validateSubtaskPlan(task,start,end);
+  const renamed=title!==sub.title,scheduled=start!==(sub.planStart||null)||end!==(sub.plan||null);
+  if(renamed)record(task,'subtask_rename',{subId:id,fromTitle:sub.title,toTitle:title,reason:sub.title+' → '+title});
+  if(scheduled)record(task,'subtask_schedule',{subId:id,fromStart:sub.planStart||null,from:sub.plan||null,toStart:start,to:end,reason:title+'：'+(sub.planStart?sub.planStart+' → '+sub.plan:'未排期')+'；调整为 '+(start?start+' → '+end:'不设日期')});
+  sub.title=title;if(scheduled){sub.planStart=start;sub.plan=end;}return renamed||scheduled;
 }
 export function deleteSubtask(task,id){
   const sub=task.subtasks.find(s=>s.id===id&&!s.deletedAt);if(!sub||task.deletedAt)throw new Error('子任务不存在或已删除');
@@ -27,6 +38,7 @@ export function deleteTask(task,byProject=null){
 }
 export function restoreSubtask(task,id){
   const sub=task.subtasks.find(s=>s.id===id&&s.deletedAt);if(!sub||task.deletedAt)throw new Error('请先恢复所属任务');
+  validateSubtaskPlan(task,sub.planStart,sub.plan);
   if(task.done&&!sub.done)toggleDone(task);
   sub.deletedAt=null;record(task,'subtask_restore',{subId:id,reason:sub.title});
 }
@@ -94,6 +106,7 @@ export function validateLifecycleTransition(current,next){
     for(const sub of old.subtasks){
       const updated=children.get(sub.id);if(!updated)throw new Error('子任务请移入回收站，不能直接删除历史');
       if(updated.title!==sub.title&&!events.some(e=>e.type==='subtask_rename'&&e.subId===sub.id&&e.fromTitle===sub.title&&e.toTitle===updated.title))throw new Error('修改子任务名称必须记录足迹');
+      if(((sub.planStart||null)!==(updated.planStart||null)||(sub.plan||null)!==(updated.plan||null))&&!events.some(e=>e.type==='subtask_schedule'&&e.subId===sub.id&&e.fromStart===(sub.planStart||null)&&e.from===(sub.plan||null)&&e.toStart===(updated.planStart||null)&&e.to===(updated.plan||null)))throw new Error('调整子任务日期必须记录足迹');
       if((sub.deletedAt||null)!==(updated.deletedAt||null)&&!events.some(e=>e.type===(updated.deletedAt?'subtask_delete':'subtask_restore')&&e.subId===sub.id))throw new Error('删除或恢复子任务必须记录足迹');
     }
   }

@@ -17,11 +17,23 @@ export function validatePlanRange(planStart, plan) {
   if (plan && !validDate(plan)) throw new Error('请选择有效的计划完成日期');
   if (planStart && plan && planStart > plan) throw new Error('计划完成日期不能早于计划开始日期');
 }
+export function validateSubtaskPlan(task,start,end,{bounds=true}={}){
+  if(!start&&!end)return;
+  if(!validDate(start)||!validDate(end))throw new Error('子任务开始和截止日期需成对填写有效日期');
+  if(start>end)throw new Error('子任务截止日期不能早于开始日期');
+  if(!bounds)return;
+  if(!validDate(task.planStart)||!validDate(task.plan))throw new Error('请先设置主任务的计划开始和完成日期，再安排子任务日期');
+  if(start<task.planStart||end>task.plan)throw new Error('子任务日期须在主任务计划范围内，请先调整子任务日期或扩大主任务范围');
+}
+export function validateSubtasksPlan(task,start=task.planStart,end=task.plan){
+  for(const sub of task.subtasks.filter(s=>!s.deletedAt))validateSubtaskPlan({planStart:start,plan:end},sub.planStart,sub.plan);
+}
 export function reschedule(task, date, reason = '', planStart = task.planStart || null) {
   if (task.done) throw new Error('请先重新打开任务，再调整计划');
   if (!validDate(date)) throw new Error('请选择有效的计划日期');
   planStart ||= null;
   validatePlanRange(planStart,date);
+  validateSubtasksPlan(task,planStart,date);
   const startChanged = planStart !== (task.planStart || null);
   if (date === task.plan && !startChanged) throw new Error('新日期与当前计划相同，无需重复保存');
   const from = task.plan;

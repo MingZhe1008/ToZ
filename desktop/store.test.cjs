@@ -154,3 +154,17 @@ test('计划起止保存及恢复，改变开始计划需留痕且实际开始�
   const bad=store.snapshot();bad.tasks[0].planStart='2026-10-21';assert.throws(()=>store.commit(bad,bad.version),/不能早于/);
 });
 test('默认深色，已有浅色选择在升级、无外观字段写入及重启后保持',t=>{const store=setup(t);assert.equal(store.snapshot().dark,true);store.commit({tasks:[],dark:false},0);store.commit({tasks:[]},1);const reopened=new Store(store.directory);assert.equal(reopened.snapshot().dark,false);reopened.close();});
+
+
+test('子任务排期经 SQLite 持久保存，导出恢复和重启保留，越界和无足迹更新被拒绝',t=>{
+  const {addSubtask,editSubtask}=require('../prototype/lifecycle.mjs'),store=setup(t),task=createTask('父子计划','2026-10-30','ToZ','','2026-10-20');
+  const sub=addSubtask(task,'带日期的子任务','2026-10-21','2026-10-25'),state=store.snapshot();state.tasks=[task];store.commit(state,state.version);
+  const saved=store.snapshot();assert.equal(saved.tasks[0].subtasks[0].plan,'2026-10-25');
+  const other=new Store(store.directory);try{assert.deepEqual(other.snapshot().tasks[0].subtasks,saved.tasks[0].subtasks);}finally{other.close();}
+  for(const mutate of [s=>s.tasks[0].subtasks[0].plan='2026-10-31',s=>s.tasks[0].subtasks[0].planStart=null,s=>s.tasks[0].subtasks[0].planStart='bad',s=>s.tasks[0].subtasks[0].plan='2026-10-24']){
+    const bad=structuredClone(saved);mutate(bad);assert.throws(()=>store.commit(bad,bad.version));assert.deepEqual(store.snapshot(),saved);
+  }
+  editSubtask(saved.tasks[0],sub.id,'带日期的子任务',{planStart:'2026-10-22',plan:'2026-10-26'});store.commit(saved,saved.version);
+  const exported=JSON.parse(JSON.stringify(store.snapshot()));store.restore(exported);assert.equal(store.snapshot().tasks[0].subtasks[0].plan,'2026-10-26');
+  const badImport=structuredClone(exported);badImport.tasks[0].subtasks[0].plan='2026-10-31';assert.throws(()=>store.restore(badImport));
+});
