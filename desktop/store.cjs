@@ -6,7 +6,7 @@ const {validateLifecycleTransition}=require('../prototype/lifecycle.mjs');
 const {purgeTrash}=require('../prototype/trash.mjs');
 const {preferences}=require('../prototype/preferences.mjs');
 const {projectList}=require('../prototype/projects.mjs');
-const {validatePlanRange}=require('../prototype/domain.mjs');
+const {validatePlanRange,validateSubtaskPlan}=require('../prototype/domain.mjs');
 const {validateSeries,occurrenceDates,materializeSeries}=require('../prototype/recurrence.mjs');
 const {validDate:validRepeatDate,addDays}=require('../prototype/domain.mjs');
 
@@ -49,11 +49,14 @@ function validateSnapshot(snapshot) {
       if(sub.deletedAt!=null&&(typeof sub.deletedAt!=='string'||!Number.isFinite(Date.parse(sub.deletedAt))))throw new Error('子任务删除日期无效');
       if (!sub.id || subIds.has(sub.id) || typeof sub.title !== 'string' || !sub.title.trim() || sub.title.length > 120 || typeof sub.done !== 'boolean') throw new Error('子任务无效');
       subIds.add(sub.id);
+      if(![sub.planStart,sub.plan].every(dateValid))throw new Error('子任务日期无效');
+      validateSubtaskPlan(task,sub.planStart,sub.plan,{bounds:!sub.deletedAt});
     }
     for (const event of task.events) {
       if (!event.id || eventIds.has(event.id) || !dateValid(event.date) || !event.date || typeof event.type !== 'string' || !Number.isFinite(Date.parse(event.at))) throw new Error('任务历史无效');
       if (['later','earlier','schedule'].includes(event.type) && (!dateValid(event.from) || !event.to || !dateValid(event.to))) throw new Error('改期历史无效');
       if(event.type==='plan_start'&&(!dateValid(event.from)||!dateValid(event.to)))throw new Error('开始计划历史无效');
+      if(event.type==='subtask_schedule'&&(!event.subId||![event.fromStart,event.from,event.toStart,event.to].every(dateValid)))throw new Error('子任务排期历史无效');
       eventIds.add(event.id);
     }
   }

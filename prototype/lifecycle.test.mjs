@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createTask,startTask,toggleDone,todayTasks,upcomingTasks,taskDateRange} from './domain.mjs';
+import {createTask,startTask,toggleDone,todayTasks,upcomingTasks,taskDateRange,reschedule} from './domain.mjs';
 import {createSeries,materializeSeries} from './recurrence.mjs';
 import {preferences} from './preferences.mjs';
-import {editSubtask,deleteSubtask,deleteTask,restoreSubtask,restoreTask,deleteProject,restoreProject,activeProjects,visibleSubtasks,validateLifecycleTransition,moveTask} from './lifecycle.mjs';
+import {addSubtask,editSubtask,deleteSubtask,deleteTask,restoreSubtask,restoreTask,deleteProject,restoreProject,activeProjects,visibleSubtasks,validateLifecycleTransition,moveTask} from './lifecycle.mjs';
 const make=()=>{const task=createTask('保留足迹','2026-10-25','ToZ','','2026-10-20');task.subtasks=[{id:'child',title:'原子任务',done:false}];return task;};
 const state=()=>{const tasks=[make()],projects=['ToZ','个人'];return {tasks,projects,recurrences:[],preferences:preferences({},projects,tasks)};};
 test('任务切换分区只修改归属并追加足迹，首次开始、日期、子任务与顺序保留',()=>{
@@ -56,4 +56,31 @@ test('最后一个分区删除创建可用的未分区，单独恢复任务可�
 });
 test('未审计的子任务改名、硬删除、软删除和任务软删除均被拒绝',()=>{
   const old=state();for(const change of [s=>s.tasks[0].subtasks[0].title='偷偷改名',s=>s.tasks[0].subtasks=[],s=>s.tasks[0].deletedAt=new Date().toISOString(),s=>s.tasks[0].subtasks[0].deletedAt=new Date().toISOString()]){const next=structuredClone(old);change(next);assert.throws(()=>validateLifecycleTransition(old,next));}
+});
+
+
+test('子任务日期可不设或包含主任务边界，倒置越界与不完整排期均拒绝且不改写',()=>{
+  const task=make();addSubtask(task,'无日期');
+  const sub=addSubtask(task,'主任务范围内','2026-10-20','2026-10-25');assert.equal(sub.planStart,task.planStart);assert.equal(sub.plan,task.plan);
+  for(const dates of [['2026-10-19','2026-10-21'],['2026-10-24','2026-10-26'],['2026-10-24','2026-10-23'],['2026-10-21',null],[null,'2026-10-22'],['bad','2026-10-22']]){
+    const before=structuredClone(task);assert.throws(()=>addSubtask(task,'拒绝',...dates));assert.deepEqual(task,before);
+    assert.throws(()=>editSubtask(task,sub.id,'不应改名',{planStart:dates[0],plan:dates[1]}));assert.deepEqual(task,before);
+  }
+  const undated=createTask('无完整排期',null);assert.throws(()=>addSubtask(undated,'排期','2026-10-20','2026-10-21'));addSubtask(undated,'不排期');
+});
+test('子任务改期可清空且足迹追加，旧子任务改名兼容，不丢完成状态',()=>{
+  const task=make(),sub=task.subtasks[0],old=structuredClone(task.events);sub.done=true;
+  editSubtask(task,sub.id,'有排期',{planStart:'2026-10-21',plan:'2026-10-22'});assert.equal(sub.done,true);assert.equal(task.events.at(-1).type,'subtask_schedule');
+  assert.deepEqual(task.events.slice(0,old.length),old);const snapshot={tasks:[structuredClone(task)],preferences:{}};
+  editSubtask(task,sub.id,'仅改名');assert.equal(sub.plan,'2026-10-22');validateLifecycleTransition(snapshot,{tasks:[task],preferences:{}});
+  editSubtask(task,sub.id,'清空日期',{planStart:null,plan:null});assert.equal(sub.planStart,null);assert.equal(sub.plan,null);
+});
+test('主任务改期不能缩出已有子任务，删除子任务后可改期但越界时不能恢复',()=>{
+  const task=make(),sub=addSubtask(task,'子计划','2026-10-21','2026-10-24'),before=structuredClone(task);
+  assert.throws(()=>reschedule(task,'2026-10-23','','2026-10-20'),/主任务计划范围/);assert.deepEqual(task,before);
+  assert.throws(()=>reschedule(task,'2026-10-25','','2026-10-22'));assert.deepEqual(task,before);
+  reschedule(task,'2026-10-26','','2026-10-19');assert.equal(sub.plan,'2026-10-24');
+  deleteSubtask(task,sub.id);reschedule(task,'2026-10-23','','2026-10-20');const deleted=structuredClone(task);
+  assert.throws(()=>restoreSubtask(task,sub.id),/主任务计划范围/);assert.deepEqual(task,deleted);
+  reschedule(task,'2026-10-25','','2026-10-20');restoreSubtask(task,sub.id);assert.equal(sub.deletedAt,null);
 });
