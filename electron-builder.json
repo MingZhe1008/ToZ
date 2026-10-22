@@ -1,0 +1,26 @@
+{
+  "appId":"com.toz.desktop",
+  "productName":"ToZ",
+  "directories":{"output":"dist","buildResources":"build"},
+  "files":["desktop/**","prototype/**","build/icon.png","package.json","!prototype/*.test.mjs","!desktop/*.test.cjs"],
+  "asar":true,
+  "electronDist":"node_modules/electron/dist",
+  "afterPack":"build/after-pack.mjs",
+  "npmRebuild":false,
+  "win":{"target":[{"target":"nsis","arch":["x64"]}],"icon":"build/icon.ico","executableName":"ToZ","signAndEditExecutable":false},
+  "nsis":{
+    "oneClick":false,
+    "perMachine":false,
+    "allowElevation":true,
+    "allowToChangeInstallationDirectory":true,
+    "createDesktopShortcut":false,
+    "createStartMenuShortcut":false,
+    "runAfterFinish":true,
+    "deleteAppDataOnUninstall":false,
+    "displayLanguageSelector":false,
+    "installerLanguages":["zh_CN","en_US"],
+    "language":"2052",
+    "include":"build/installer.nsh",
+    "artifactName":"ToZ-Setup-${version}-x64.exe"
+  }
+}
