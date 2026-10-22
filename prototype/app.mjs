@@ -488,6 +488,8 @@ if(native?.surface==='quick-add'){
   const actions=form.querySelector('.dialog-actions');
   while(form.firstChild&&form.firstChild!==actions)body.append(form.firstChild);
   form.prepend(heading,body);
+  const titlebar=document.createElement('header');titlebar.className='quick-add-titlebar';titlebar.textContent='新建待办 · ToZ';
+  $('#new-dialog').prepend(titlebar);
   $('#new-dialog').addEventListener('close',()=>nativeCommand('close-quick-add'));
 }
 mountDatePickers();hydrateIcons();mountDesktopSettings(toast);if(!saveError)ensureRecurrences();render();
