@@ -30,10 +30,13 @@ module.exports=async function quickAddSmoke({store,mainWindow,widgetWindow,getQu
     check(await js(window,`document.querySelector('#new-form').elements.project.value===${JSON.stringify(snapshot.preferences.widgetProject||snapshot.projects[0])}`),'默认沿用浮窗分区');
     await js(window,`document.querySelector('#new-form').elements.title.value='快速新增保留草稿'`);
     await open();check(getQuickAdd()===window&&await js(window,`document.querySelector('#new-form').elements.title.value==='快速新增保留草稿'`),'重复点击聚焦同一窗口并保留草稿');
-    const layouts=[];
+    const layouts=[],titlebars=[];
     for(const dark of [true,false]){
       const next=store.snapshot();next.dark=dark;store.commit(next,next.version);broadcast();await pause();
       window.setSize(500,780);await pause();layouts.push(await layout(window));
+      const titlebar=await js(window,`(() => {const bar=document.querySelector('.quick-add-titlebar'),style=getComputedStyle(bar),rect=bar.getBoundingClientRect(),controls=navigator.windowControlsOverlay;return {theme:document.documentElement.dataset.theme,background:style.backgroundColor,color:style.color,drag:style.getPropertyValue('-webkit-app-region'),height:rect.height,top:rect.top,overlay:!!controls?.visible,controlAreaHeight:controls?.getTitlebarAreaRect().height};})()`);
+      titlebars.push(titlebar);
+      check(titlebar.overlay&&titlebar.top===0&&titlebar.height===34&&titlebar.drag==='drag'&&titlebar.background===(dark?'rgb(37, 37, 40)':'rgb(242, 242, 247)')&&titlebar.color===(dark?'rgb(245, 245, 247)':'rgb(29, 29, 31)'),(dark?'深色':'浅色')+'新增标题栏与原生窗口按钮区域随应用主题同步');
       if(outputDirectory)fs.writeFileSync(path.join(outputDirectory,`quick-add-${dark?'dark':'light'}.png`),(await window.webContents.capturePage()).toPNG());
       window.setSize(380,480);await pause();layouts.push(await layout(window));
       if(outputDirectory)fs.writeFileSync(path.join(outputDirectory,`quick-add-small-${dark?'dark':'light'}.png`),(await window.webContents.capturePage()).toPNG());
@@ -83,7 +86,7 @@ module.exports=async function quickAddSmoke({store,mainWindow,widgetWindow,getQu
     await new Promise(resolve=>setTimeout(resolve,400));
     check(await js(mainWindow,`!document.querySelector('dialog[open]')&&!document.querySelector('#calendar-view').hidden`),'日历截图前确认视图可见且无弹窗遮挡');
     if(outputDirectory)fs.writeFileSync(path.join(outputDirectory,'recurring-calendar.png'),(await mainWindow.webContents.capturePage()).toPNG());
-    return {ok:true,checks,layouts};
+    return {ok:true,checks,layouts,titlebars};
   }finally{
     mainWindow.removeListener('show',onShow);
     getQuickAdd()?.close();

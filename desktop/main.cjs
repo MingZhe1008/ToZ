@@ -21,7 +21,8 @@ if(!lock){app.quit();}else{
 }
 function startupState(){return startup.state();}
 function showMain(command){if(!mainWindow)return;if(mainWindow.isMinimized())mainWindow.restore();mainWindow.show();mainWindow.focus();if(command)mainWindow.webContents.send('toz:ui-command',command);}
-function applyTheme(){const dark=store.snapshot().dark;mainWindow?.setBackgroundColor(dark?'#1c1c1e':'#ffffff');mainWindow?.setTitleBarOverlay({color:dark?'#252528':'#f2f2f7',symbolColor:dark?'#f5f5f7':'#1d1d1f',height:34});}
+function titleBarTheme(dark){return {color:dark?'#252528':'#f2f2f7',symbolColor:dark?'#f5f5f7':'#1d1d1f',height:34};}
+function applyTheme(){const dark=store.snapshot().dark;for(const window of [mainWindow,quickAddWindow])if(window&&!window.isDestroyed()){window.setBackgroundColor(dark?'#1c1c1e':'#ffffff');window.setTitleBarOverlay(titleBarTheme(dark));}}
 function broadcast(){applyTheme();const snapshot=store.snapshot();for(const w of [mainWindow,widgetWindow,quickAddWindow])if(w&&!w.isDestroyed())w.webContents.send('toz:state',snapshot);}
 function secure(window){window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('file:'))event.preventDefault();});}
 function fitBounds(bounds,fallback){
@@ -62,7 +63,8 @@ async function openQuickAdd(date){
   const width=Math.min(500,area.width),height=Math.min(780,area.height);
   const x=Math.max(area.x,Math.min(anchor.x-width-12,area.x+area.width-width));
   const y=Math.max(area.y,Math.min(anchor.y,area.y+area.height-height));
-  const window=new BrowserWindow({x,y,width,height,minWidth:360,minHeight:420,title:'新建待办 · ToZ',icon:iconPath,show:false,autoHideMenuBar:true,backgroundColor:store.snapshot().dark?'#1c1c1e':'#f9f9fb',alwaysOnTop:store.settings().widgetPinned,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,additionalArguments:[...(smoke?['--toz-smoke']:[]),'--toz-quick-add']}});
+  const dark=store.snapshot().dark;
+  const window=new BrowserWindow({x,y,width,height,minWidth:360,minHeight:420,title:'新建待办 · ToZ',titleBarStyle:'hidden',titleBarOverlay:titleBarTheme(dark),icon:iconPath,show:false,autoHideMenuBar:true,backgroundColor:dark?'#1c1c1e':'#f9f9fb',alwaysOnTop:store.settings().widgetPinned,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,additionalArguments:[...(smoke?['--toz-smoke']:[]),'--toz-quick-add']}});
   quickAddWindow=window;secure(window);
   window.on('closed',()=>{if(quickAddWindow===window)quickAddWindow=null;rendererReports.delete('quick-add');});
   try{await window.loadFile(path.join(__dirname,'..','prototype','index.html'),{query:{date:date||''}});}
