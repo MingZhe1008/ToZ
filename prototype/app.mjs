@@ -9,7 +9,7 @@ import {eventTone} from './task-events.mjs';
 import { mountGantt } from './gantt.mjs';
 import { DEFAULT_PROJECTS, projectName, projectList, projectColor, setProjectColors } from './projects.mjs';
 import { TODAY, uid, seedTasks, createTask, reschedule, startTask, toggleDone, duration, postponements, shiftedDays, todayTasks, dayDiff, addDays, refreshToday, upcomingTasks, taskDateRange } from './domain.mjs';
-import { monthDays, shiftMonth, tasksByDate, dayPreview, calendarWeeks } from './calendar.mjs';
+import { monthDays, shiftMonth, tasksByDate, dayPreview, calendarWeeks, calendarTaskRange } from './calendar.mjs';
 import { mountDatePickers, syncDatePickers, closeDatePickers } from './date-picker.mjs';
 import { mountDesktopSettings, refreshDesktopSettings } from './desktop-ui.mjs';
 
@@ -118,7 +118,7 @@ function mutate(action, message) {
   try { action();if(tasks.find(t=>t.id===selected)?.deletedAt)selected=tasks.find(t=>!t.deletedAt&&!t.cancelled)?.id||null;if(view.startsWith('project:')&&!shownProjects().includes(view.slice(8)))view='all'; const ok = save(); render(); reportRenderer(); if (ok && message) toast(message); } catch(error) { toast(error.message); }
 }
 function ensureRecurrences(through=addDays(TODAY,45)){
-  try{const added=materializeSeries(recurrences,tasks,through);if(!added.length)return false;tasks.unshift(...added);return save();}catch(error){toast(error.message);return false;}
+  try{const added=materializeSeries(recurrences,tasks,through);if(!added.length)return false;tasks.unshift(...added);prefs.taskOrder=[...added.map(t=>t.id),...prefs.taskOrder];return save();}catch(error){toast(error.message);return false;}
 }
 function readRepeatRule(){
   const form=$('#new-form'),preset=form.elements.repeatPreset.value;
@@ -212,7 +212,7 @@ function renderList() {
   if(beforeGlobalSearch!==null)$('#global-search').value=query;
 }
 function calendarTask(task, date) {
-  const range=taskDateRange(task), marker=date===range?.start?'开始':date===range?.end?(task.done?'完成':task.plan===date?'截止':''):'';
+  const range=calendarTaskRange(task), marker=date===range?.start?'开始':date===range?.end?(task.done?'完成':task.plan===date?'截止':''):'';
   return `<div class="calendar-task ${task.done ? 'is-done' : ''} " style="--project-color:${projectColor(task.project)}"><button class="calendar-check" data-action="complete" ${taskIdAttr(task)} aria-label="${task.done ? '重新打开' : '完成'}：${esc(task.title)}" aria-pressed="${!!task.done}">${task.done ? svg('check') : ''}</button><button class="calendar-task-title" data-action="calendar-select" ${taskIdAttr(task)} title="${esc(task.title)} · ${dateText(range?.start)} — ${dateText(range?.end)}" aria-label="查看详情：${esc(task.title)}">${esc(task.title)}</button>${marker?`<span class="calendar-range-mark">${marker}</span>`:''}</div>`;
 }
 function renderMonthGrid() {
@@ -227,7 +227,7 @@ function renderMonthGrid() {
 function renderCalendar() {
   ensureRecurrences(monthDays(calendarMonth).at(-1).date);
   const [year, month] = calendarMonth.split('-').map(Number);
-  $('#calendar-view').innerHTML = `<div class="calendar-topline"><span>我的空间 <i>/</i> 日历</span><span class="calendar-view-label">MONTH VIEW</span></div><div class="calendar-header"><div><div class="calendar-kicker">把日子，慢慢填好。</div><h1 id="calendar-title">${year}<small>年</small> ${month}<small>月</small></h1></div><div class="calendar-navigation"><button class="icon-button" data-action="calendar-prev" aria-label="上个月">‹</button><button class="calendar-back-today" data-action="calendar-today">今天</button><button class="icon-button" data-action="calendar-next" aria-label="下个月">›</button><button class="button primary calendar-new" data-action="new">${svg('plus')}新建待办</button></div></div><div class="calendar-subbar"><div class="calendar-legend">${shownProjects().map(name=>`<span><i class="project-dot" style="background:${projectColor(name)}"></i>${esc(name)}</span>`).join('')}<span class="calendar-limit">每天最多显示 5 项，可展开</span></div><label class="calendar-search">${svg('search')}<input id="calendar-search" type="search" aria-label="搜索日历事项" placeholder="搜索本月事项" value="${esc(calendarQuery)}"></label></div><div class="calendar-scroll"><div class="calendar-board"><div class="month-weekdays">${['周一','周二','周三','周四','周五','周六','周日'].map(day => `<span>${day}</span>`).join('')}</div><div class="month-grid" id="month-grid"></div></div></div><div class="calendar-bottom"><span id="calendar-result-count"></span><span>${svg('info')}跨日任务连续展示 · 长按任务拖动排序</span></div>`;
+  $('#calendar-view').innerHTML = `<div class="calendar-topline"><span>我的空间 <i>/</i> 日历</span><span class="calendar-view-label">MONTH VIEW</span></div><div class="calendar-header"><div><div class="calendar-kicker">把日子，慢慢填好。</div><h1 id="calendar-title">${year}<small>年</small> ${month}<small>月</small></h1></div><div class="calendar-navigation"><button class="icon-button" data-action="calendar-prev" aria-label="上个月">‹</button><button class="calendar-back-today" data-action="calendar-today">今天</button><button class="icon-button" data-action="calendar-next" aria-label="下个月">›</button><button class="button primary calendar-new" data-action="new">${svg('plus')}新建待办</button></div></div><div class="calendar-subbar"><div class="calendar-legend">${shownProjects().map(name=>`<span><i class="project-dot" style="background:${projectColor(name)}"></i>${esc(name)}</span>`).join('')}<span class="calendar-limit">每天最多显示 5 项，可展开</span></div><label class="calendar-search">${svg('search')}<input id="calendar-search" type="search" aria-label="搜索日历事项" placeholder="搜索本月事项" value="${esc(calendarQuery)}"></label></div><div class="calendar-scroll"><div class="calendar-board"><div class="month-weekdays">${['周一','周二','周三','周四','周五','周六','周日'].map(day => `<span>${day}</span>`).join('')}</div><div class="month-grid" id="month-grid"></div></div></div><div class="calendar-bottom"><span id="calendar-result-count"></span><span>${svg('info')}普通任务跨日连续 · 周期任务仅显示本期日期</span></div>`;
   renderMonthGrid();
 }
 function eventMarkup(event) {
@@ -325,9 +325,9 @@ function reportRenderer(){if(native?.smoke)native.command('smoke-ready',{surface
 async function nativeCommand(name,arg){try{return await native.command(name,arg);}catch(error){toast(error.message);return false;}}
 function openDialog(id) { const d = $(id); closeDatePickers(); syncDatePickers(); d.querySelectorAll('.form-error').forEach(el=>el.textContent=''); d.showModal(); }
 function openNew(date) {
-  if(native?.surface==='widget'){nativeCommand('open-main',{action:'new',date});return;}
+  if(native?.surface==='widget'){nativeCommand('open-quick-add',{date});return;}
   $('#new-form').reset();
-  renderProjects();if(view.startsWith('project:'))$('#new-form').elements.project.value=view.slice(8);
+  renderProjects();if(native?.surface==='quick-add'&&prefs.widgetProject)$('#new-form').elements.project.value=prefs.widgetProject;else if(view.startsWith('project:'))$('#new-form').elements.project.value=view.slice(8);
   editingTask=null;$('#new-dialog h2').textContent='新的待办';$('#new-form [type="submit"]').textContent='创建待办';$('#new-form .task-date-range').hidden=false;$('#range-presets').hidden=false;$('#recurrence-section').hidden=false;
   $('#new-form').elements.date.value = date || (view === 'calendar' && calendarMonth !== TODAY.slice(0,7) ? calendarMonth + '-01' : TODAY);
   $('#new-form').elements.startDate.value=$('#new-form').elements.date.value;
@@ -419,7 +419,24 @@ document.addEventListener('input',event=>{if(event.target.id==='calendar-search'
 $('#new-form').addEventListener('submit',event=>{
   event.preventDefault();const form=event.currentTarget;
   if(editingTask){const task=tasks.find(t=>t.id===editingTask);if(!task)return;mutate(()=>{task.title=form.elements.title.value.trim();task.note=form.elements.note.value.trim();task.project=form.elements.project.value;task.events.push({id:uid(),type:'edit',date:TODAY,at:new Date().toISOString()});},'任务内容已保存，所有日期保持不变');$('#new-dialog').close();return;}
-  try{let task=createTask(form.elements.title.value,form.elements.date.value,form.elements.project.value,form.elements.note.value,form.elements.startDate.value);if(form.elements.repeatPreset.value!=='none'){const series=createSeries(task,readRepeatRule(),form.elements.repeatUntil.value||null);const newTasks=materializeSeries([series],tasks);if(!newTasks.length)throw new Error('此周期在结束日期前没有执行日期');recurrences.push(series);tasks.unshift(...newTasks);task=newTasks[0];selected=task.id;}else{tasks.unshift(task);selected=task.id;}query='';beforeGlobalSearch=null;$('#global-search').value='';$('#task-search').value='';if(view==='gantt'){gantt.reveal(task);calendarDetailOpen=false;}else if(view==='calendar'){calendarMonth=(task.plan||TODAY).slice(0,7);calendarQuery='';calendarDetailOpen=false;}else view=todayTasks([task]).length?'today':upcomingTasks([task]).length?'upcoming':'all';historyOnly=false;const ok=save();render();if(!ok){form.querySelector('.form-error').textContent=saveError;return;}$('#new-dialog').close();if(ok)toast('待办已创建，点击“开始任务”记录首次开始');}catch(error){form.querySelector('.form-error').textContent=error.message;}
+  try{
+    let task=createTask(form.elements.title.value,form.elements.date.value,form.elements.project.value,form.elements.note.value,form.elements.startDate.value);
+    let created=[task];
+    if(form.elements.repeatPreset.value!=='none'){
+      const series=createSeries(task,readRepeatRule(),form.elements.repeatUntil.value||null);
+      created=materializeSeries([series],tasks);
+      if(!created.length)throw new Error('此周期在结束日期前没有执行日期');
+      recurrences.push(series);task=created[0];
+    }
+    tasks.unshift(...created);prefs.taskOrder=[...created.map(t=>t.id),...prefs.taskOrder];selected=task.id;
+    query='';beforeGlobalSearch=null;$('#global-search').value='';$('#task-search').value='';
+    if(view==='gantt'){gantt.reveal(task);calendarDetailOpen=false;}
+    else if(view==='calendar'){calendarMonth=(task.plan||TODAY).slice(0,7);calendarQuery='';calendarDetailOpen=false;}
+    else view=todayTasks([task]).length?'today':upcomingTasks([task]).length?'upcoming':'all';
+    historyOnly=false;const ok=save();render();reportRenderer();
+    if(!ok){form.querySelector('.form-error').textContent=saveError;return;}
+    $('#new-dialog').close();toast('待办已创建并置顶，点击“开始任务”记录首次开始');
+  }catch(error){form.querySelector('.form-error').textContent=error.message;}
 });
 $('#reschedule-form').addEventListener('submit',event=>{
   event.preventDefault();const form=event.currentTarget,task=tasks.find(t=>t.id===rescheduleId);
@@ -463,8 +480,19 @@ mountReorder({onReady:()=>toast('拖动到目标位置松开 · Esc 取消'),onM
   else prefs.taskOrder=moveBefore(preferences(prefs,projects,tasks).taskOrder,id,target,after);
   save();render();reportRenderer();
 }});
+if(native?.surface==='quick-add'){
+  // Keep the heading and actions visible while the shared form scrolls.
+  const form=$('#new-form'),heading=document.createElement('div'),body=document.createElement('div');
+  heading.className='quick-add-heading';body.className='quick-add-body';
+  heading.append(form.querySelector('.dialog-top'),form.querySelector('h2'));
+  const actions=form.querySelector('.dialog-actions');
+  while(form.firstChild&&form.firstChild!==actions)body.append(form.firstChild);
+  form.prepend(heading,body);
+  $('#new-dialog').addEventListener('close',()=>nativeCommand('close-quick-add'));
+}
 mountDatePickers();hydrateIcons();mountDesktopSettings(toast);if(!saveError)ensureRecurrences();render();
 if(native){
+  if(native.surface==='quick-add')openNew(new URLSearchParams(location.search).get('date')||undefined);
   reportRenderer();
   native.onState(snapshot=>{if(snapshot.version>dataVersion)applySnapshot(snapshot);});
   native.onCommand(async command=>{if(!command)return;if(['gantt','calendar','today'].includes(command.action)){$('dialog[open]')?.close();view=command.action;calendarDetailOpen=false;render();reportRenderer();}if(command.action==='new')openNew(command.date);if(command.action==='project')openProject(command.name);if(command.action==='edit'){selected=command.id;view='all';render();openEdit(tasks.find(t=>t.id===command.id));}if(command.action==='edit-subtask')openSubtaskEdit(command.id,command.subId);if(command.action==='trash')openTrash();if(command.action==='add-subtask'){selected=command.id;view='all';render();$('#subtask-form input')?.focus();}if(command.action==='settings'){await refreshDesktopSettings();openDialog('#settings-dialog');}if(command.action==='select'||command.action==='reschedule'){selected=command.id;view='all';render();if(command.action==='reschedule')openReschedule(command.id);}});

@@ -9,7 +9,7 @@ const smoke=process.argv.includes('--smoke-test');
 const dataArg=process.argv.find(a=>a.startsWith('--toz-data='));
 if(dataArg)app.setPath('userData',path.resolve(dataArg.slice(11)));
 app.setName('ToZ');app.setAppUserModelId(APP_ID);
-let mainWindow,widgetWindow,tray,store,startup,quitting=false,widgetIgnore=false;
+let mainWindow,widgetWindow,quickAddWindow,tray,store,startup,quitting=false,widgetIgnore=false;
 const rendererReports=new Map();
 const miniSamples=new Set();
 const iconPath=path.join(__dirname,'..','build','icon.png');
@@ -22,7 +22,7 @@ if(!lock){app.quit();}else{
 function startupState(){return startup.state();}
 function showMain(command){if(!mainWindow)return;if(mainWindow.isMinimized())mainWindow.restore();mainWindow.show();mainWindow.focus();if(command)mainWindow.webContents.send('toz:ui-command',command);}
 function applyTheme(){const dark=store.snapshot().dark;mainWindow?.setBackgroundColor(dark?'#1c1c1e':'#ffffff');mainWindow?.setTitleBarOverlay({color:dark?'#252528':'#f2f2f7',symbolColor:dark?'#f5f5f7':'#1d1d1f',height:34});}
-function broadcast(){applyTheme();const snapshot=store.snapshot();for(const w of [mainWindow,widgetWindow])if(w&&!w.isDestroyed())w.webContents.send('toz:state',snapshot);}
+function broadcast(){applyTheme();const snapshot=store.snapshot();for(const w of [mainWindow,widgetWindow,quickAddWindow])if(w&&!w.isDestroyed())w.webContents.send('toz:state',snapshot);}
 function secure(window){window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('file:'))event.preventDefault();});}
 function fitBounds(bounds,fallback){
   const displays=screen.getAllDisplays();
@@ -35,7 +35,7 @@ function fitBounds(bounds,fallback){
 }
 function createWindows(){
   const primary=screen.getPrimaryDisplay().workArea;
-  const common={preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,additionalArguments:smoke?['--toz-smoke']:[]};
+  const common={preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:!smoke,additionalArguments:smoke?['--toz-smoke']:[]};
   mainWindow=new BrowserWindow({...fitBounds(store.meta('mainBounds',null),{width:Math.min(1200,primary.width-24),height:Math.min(820,primary.height-24)}),minWidth:960,minHeight:600,title:'ToZ',titleBarStyle:'hidden',titleBarOverlay:{color:'#f2f2f7',symbolColor:'#1d1d1f',height:34},icon:iconPath,backgroundColor:'#ffffff',show:false,autoHideMenuBar:true,webPreferences:common});
   widgetWindow=new BrowserWindow({...fitBounds(store.meta('widgetBounds',null),{x:primary.x+primary.width-356,y:primary.y+80,width:336,height:550}),minWidth:280,maxWidth:480,minHeight:64,maxHeight:900,frame:false,maximizable:false,transparent:true,backgroundColor:'#00000000',hasShadow:false,show:false,skipTaskbar:true,resizable:true,alwaysOnTop:store.settings().widgetPinned,icon:iconPath,webPreferences:{...common,additionalArguments:[...(common.additionalArguments||[]),'--toz-widget']}});
   secure(mainWindow);secure(widgetWindow);
@@ -53,6 +53,23 @@ function createWindows(){
   widgetWindow.once('ready-to-show',()=>{applyWidget();});
   screen.on('display-removed',()=>{for(const w of [mainWindow,widgetWindow]){const bounds=w.getBounds(),fit=fitBounds(bounds,{...bounds,x:screen.getPrimaryDisplay().workArea.x+40,y:screen.getPrimaryDisplay().workArea.y+40});w.setBounds(fit);}});
 }
+async function openQuickAdd(date){
+  if(quickAddWindow&&!quickAddWindow.isDestroyed()){
+    if(quickAddWindow.isMinimized())quickAddWindow.restore();
+    quickAddWindow.show();quickAddWindow.focus();return true;
+  }
+  const anchor=widgetWindow.getBounds(),area=screen.getDisplayMatching(anchor).workArea;
+  const width=Math.min(500,area.width),height=Math.min(780,area.height);
+  const x=Math.max(area.x,Math.min(anchor.x-width-12,area.x+area.width-width));
+  const y=Math.max(area.y,Math.min(anchor.y,area.y+area.height-height));
+  const window=new BrowserWindow({x,y,width,height,minWidth:360,minHeight:420,title:'新建待办 · ToZ',icon:iconPath,show:false,autoHideMenuBar:true,backgroundColor:store.snapshot().dark?'#1c1c1e':'#f9f9fb',alwaysOnTop:store.settings().widgetPinned,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,additionalArguments:[...(smoke?['--toz-smoke']:[]),'--toz-quick-add']}});
+  quickAddWindow=window;secure(window);
+  window.on('closed',()=>{if(quickAddWindow===window)quickAddWindow=null;rendererReports.delete('quick-add');});
+  try{await window.loadFile(path.join(__dirname,'..','prototype','index.html'),{query:{date:date||''}});}
+  catch(error){if(!window.isDestroyed())window.destroy();throw error;}
+  if(!window.isDestroyed()){window.setTitle('新建待办 · ToZ');window.show();window.focus();}
+  return true;
+}
 function applyWidget(){const settings=store.settings();widgetWindow.setAlwaysOnTop(settings.widgetPinned);if(!smoke){if(settings.widgetVisible)widgetWindow.showInactive();else widgetWindow.hide();}if(settings.widgetCollapsed)resizeWidgetHeight(widgetWindow,68);}
 function rebuildTray(){if(!tray)return;const settings=store.settings();tray.setContextMenu(Menu.buildFromTemplate([
   {label:'打开 ToZ',click:()=>showMain()},
@@ -69,7 +86,7 @@ function setWidgetCollapsed(value){
   store.updateSettings({widgetCollapsed:!!value});
   resizeWidgetHeight(widgetWindow,value?68:store.meta('widgetExpandedHeight',550));broadcast();
 }
-function trusted(event){return [mainWindow,widgetWindow].some(w=>w&&!w.isDestroyed()&&w.webContents===event.sender);}
+function trusted(event){return [mainWindow,widgetWindow,quickAddWindow].some(w=>w&&!w.isDestroyed()&&w.webContents===event.sender);}
 function handlers(){
   ipcMain.on('toz:read',event=>{event.returnValue=trusted(event)?{ok:true,snapshot:store.snapshot()}:{ok:false,error:'无效窗口'};});
   ipcMain.on('toz:commit',(event,{snapshot,version})=>{
@@ -92,6 +109,8 @@ function handlers(){
     switch(name){
       case 'smoke-ready':if(smoke){rendererReports.set(arg.surface,arg);if(arg.surface==='widget'&&arg.collapsed&&arg.miniTask)miniSamples.add(arg.miniTask);}return true;
       case 'open-main':showMain(arg);return true;
+      case 'open-quick-add':return openQuickAdd(arg?.date);
+      case 'close-quick-add':quickAddWindow?.close();return true;
       case 'toggle-widget':toggleWidget();return true;
       case 'show-widget':store.updateSettings({widgetVisible:true});setIgnore(false);applyWidget();widgetWindow.showInactive();widgetWindow.moveTop();rebuildTray();broadcast();return true;
       case 'hide-widget':store.updateSettings({widgetVisible:false});applyWidget();rebuildTray();broadcast();return true;
@@ -277,10 +296,11 @@ async function start(){
     for(let i=0;i<3;i++){setWidgetCollapsed(true);setWidgetCollapsed(false);}
     const widgetWidthStable=widgetWindow.getContentSize()[0]===widgetWidth;
     if(!widgetWidthStable)errors.push('重复展开收缩后浮窗宽度发生变化');
+    const quickAddCheck=await require('./quick-add-smoke.cjs')({store,mainWindow,widgetWindow,getQuickAdd:()=>quickAddWindow,broadcast,outputDirectory:smokeResult?path.dirname(smokeResult):null});
     const trashCheck=await require('./trash-smoke.cjs')({store,mainWindow,widgetWindow,broadcast,rendererReports,outputDirectory:smokeResult?path.dirname(smokeResult):null});
     if(smokeResult){fs.mkdirSync(path.dirname(smokeResult),{recursive:true});fs.writeFileSync(path.join(path.dirname(smokeResult),'client.png'),mainImage.toPNG());fs.writeFileSync(path.join(path.dirname(smokeResult),'widget.png'),widgetImage.toPNG());fs.writeFileSync(path.join(path.dirname(smokeResult),'settings.png'),settingsImage.toPNG());fs.writeFileSync(smokeResult,JSON.stringify({ok:errors.length===0,errors,version:app.getVersion(),electron:process.versions.electron,node:process.versions.node,sqlite:!!store.db,synchronized,reports:[...rendererReports.values()],windows:[{name:'main',size:mainWindow.getSize()},{name:'widget',frameless:true,transparent:true,size:widgetWindow.getSize()}],tasks:store.snapshot().tasks.length},null,2));}
     if(smokeResult){const report=JSON.parse(fs.readFileSync(smokeResult));Object.assign(report,{subtaskRenameSynced,deletionSynced,recoverySynced,sidebarSectionsFit,sidebarLayouts,projectPreferencesSynced,taskPinSynced,lunarReady,calendarSpans,startupCheck,themeSynced,initialDark,spanTaskVisible,visibilityToggle,miniRotates,beforeMini,afterMini,nativeDoubleClickHook,widgetWidthStable,ganttReady,recurringSynced,widgetSubtasksReady,neutralControls,darkControls,lightControls});fs.writeFileSync(path.join(path.dirname(smokeResult),'calendar.png'),calendarImage.toPNG());fs.writeFileSync(path.join(path.dirname(smokeResult),'gantt.png'),ganttImage.toPNG());fs.writeFileSync(path.join(path.dirname(smokeResult),'collapsed-widget.png'),collapsedImage.toPNG());fs.writeFileSync(path.join(path.dirname(smokeResult),'dark.png'),darkImage.toPNG());fs.writeFileSync(path.join(path.dirname(smokeResult),'dark-widget.png'),darkWidgetImage.toPNG());fs.writeFileSync(path.join(path.dirname(smokeResult),'light.png'),lightImage.toPNG());fs.writeFileSync(path.join(path.dirname(smokeResult),'light-widget.png'),lightWidgetImage.toPNG());fs.writeFileSync(smokeResult,JSON.stringify(report,null,2));}
-    if(smokeResult){const report=JSON.parse(fs.readFileSync(smokeResult));Object.assign(report,{trashCheck,completionContrast,rescheduleLayout,visualChecks,taskMoveSynced,contextMenuMain,contextMenuWidget,datePickerNew,datePickerReschedule});fs.writeFileSync(path.join(path.dirname(smokeResult),'context-widget.png'),contextWidgetImage.toPNG());fs.writeFileSync(path.join(path.dirname(smokeResult),'reschedule-dark.png'),darkRescheduleImage.toPNG());fs.writeFileSync(path.join(path.dirname(smokeResult),'reschedule-light.png'),lightRescheduleImage.toPNG());fs.writeFileSync(smokeResult,JSON.stringify(report,null,2));}
+    if(smokeResult){const report=JSON.parse(fs.readFileSync(smokeResult));Object.assign(report,{quickAddCheck,trashCheck,completionContrast,rescheduleLayout,visualChecks,taskMoveSynced,contextMenuMain,contextMenuWidget,datePickerNew,datePickerReschedule});fs.writeFileSync(path.join(path.dirname(smokeResult),'context-widget.png'),contextWidgetImage.toPNG());fs.writeFileSync(path.join(path.dirname(smokeResult),'reschedule-dark.png'),darkRescheduleImage.toPNG());fs.writeFileSync(path.join(path.dirname(smokeResult),'reschedule-light.png'),lightRescheduleImage.toPNG());fs.writeFileSync(smokeResult,JSON.stringify(report,null,2));}
     app.quit();
   }
 }
