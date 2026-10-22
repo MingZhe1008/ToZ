@@ -48,6 +48,18 @@ namespace ToZ.Setup {
     protected override void OnPaint(PaintEventArgs e){Palette.ClearSurface(e.Graphics,this);e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;using(var p=Palette.Round(new Rectangle(1,1,Width-3,Height-3),12))using(var fill=new SolidBrush(Palette.Paper))using(var pen=new Pen(Palette.Line)){e.Graphics.FillPath(fill,p);e.Graphics.DrawPath(pen,p);}using(var pen=new Pen(Palette.Muted,1.5f))e.Graphics.DrawRectangle(pen,Palette.R(e.Graphics,20,26,16,16));if(Checked)using(var pen=new Pen(Palette.Ink,2)){e.Graphics.DrawLines(pen,new[]{Palette.P(e.Graphics,23,34),Palette.P(e.Graphics,28,39),Palette.P(e.Graphics,34,29)});}TextRenderer.DrawText(e.Graphics,Text,Font,Palette.R(e.Graphics,52,19,(int)(Width/(e.Graphics.DpiX/96f))-70,28),Palette.Ink,TextFormatFlags.Left);using(var f=new Font("Microsoft YaHei UI",9))TextRenderer.DrawText(e.Graphics,Note,f,Palette.R(e.Graphics,52,50,(int)(Width/(e.Graphics.DpiX/96f))-70,40),Palette.Muted,TextFormatFlags.WordBreak);if(Focused&&ShowFocusCues)ControlPaint.DrawFocusRectangle(e.Graphics,new Rectangle(8,8,Width-16,Height-16));}
     protected override void OnCheckedChanged(EventArgs e){Invalidate();base.OnCheckedChanged(e);}
   }
+  class SetupProgress {public int Percent;public string Message;public SetupProgress(int percent,string message){Percent=percent;Message=message;}}
+  class ProgressCaption:Control {
+    public string Message="正在准备安装文件";public int Percent;
+    public ProgressCaption(){SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.ResizeRedraw,true);}
+    protected override void OnPaint(PaintEventArgs e){Palette.ClearSurface(e.Graphics,this);var left=ClientRectangle;left.Width-=80;TextRenderer.DrawText(e.Graphics,Message+" · 阶段进度",Font,left,Palette.Muted,TextFormatFlags.Left|TextFormatFlags.Top|TextFormatFlags.EndEllipsis);TextRenderer.DrawText(e.Graphics,Percent+"%",Font,ClientRectangle,Palette.Muted,TextFormatFlags.Right|TextFormatFlags.Top);}
+  }
+  class QuietProgress:Control {
+    int value;
+    public int Value{get{return value;}set{this.value=Math.Max(0,Math.Min(100,value));Invalidate();}}
+    public QuietProgress(){SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.ResizeRedraw,true);}
+    protected override void OnPaint(PaintEventArgs e){Palette.ClearSurface(e.Graphics,this);e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;var rect=new Rectangle(0,0,Width-1,Height-1);int radius=Math.Max(1,rect.Height/2);using(var track=Palette.Round(rect,radius))using(var brush=new SolidBrush(Color.FromArgb(62,62,66))){e.Graphics.FillPath(brush,track);if(value>0){var clip=e.Graphics.Save();e.Graphics.SetClip(track);using(var fill=Palette.Round(new Rectangle(0,0,Math.Max(rect.Height,(int)(rect.Width*value/100f)),rect.Height),radius))using(var ink=new SolidBrush(Color.FromArgb(127,152,136)))e.Graphics.FillPath(ink,fill);e.Graphics.Restore(clip);}}}
+  }
   static class InstallEngine {
     internal const string InstallKey=@"Software\1d101d23-307c-5be8-9c21-3a83d6538425";
     internal const string RunKey=@"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -61,14 +73,16 @@ namespace ToZ.Setup {
     internal static string Existing(bool all){using(var key=(all?Registry.LocalMachine:Registry.CurrentUser).OpenSubKey(InstallKey)){return key==null?null:key.GetValue("InstallLocation") as string;}}
     internal static bool Startup(){using(var key=Registry.CurrentUser.OpenSubKey(RunKey)){return key!=null&&!String.IsNullOrEmpty(key.GetValue("ToZ") as string);}}
     internal static void SetStartup(bool enabled,string executable){using(var key=Registry.CurrentUser.CreateSubKey(RunKey)){if(enabled)key.SetValue("ToZ","\""+executable+"\" --autostart");else key.DeleteValue("ToZ",false);}}
-    internal static int Run(bool all,string directory,bool desktop,bool menu){
+    internal static int Run(bool all,string directory,bool desktop,bool menu,IProgress<SetupProgress> progress=null){
 #if UI_PREVIEW
       throw new InvalidOperationException("隔离界面验收程序禁止执行安装。");
 #else
       string temp=Path.Combine(Path.GetTempPath(),"ToZ-Setup-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(temp);string engine=Path.Combine(temp,"ToZ-Engine.exe");
       try{
-        using(var input=Assembly.GetExecutingAssembly().GetManifestResourceStream("ToZ.Engine"))using(var output=File.Create(engine)){if(input==null)throw new InvalidDataException("缺少安装引擎，请重新获取完整安装包。");input.CopyTo(output);}
+        using(var input=Assembly.GetExecutingAssembly().GetManifestResourceStream("ToZ.Engine"))using(var output=File.Create(engine)){if(input==null)throw new InvalidDataException("缺少安装引擎，请重新获取完整安装包。");var buffer=new byte[1024*1024];long copied=0;int count;while((count=input.Read(buffer,0,buffer.Length))>0){output.Write(buffer,0,count);copied+=count;if(progress!=null)progress.Report(new SetupProgress((int)(copied*20/input.Length),"正在准备安装文件"));}}
+        if(progress!=null)progress.Report(new SetupProgress(20,"正在校验安装文件"));
         using(var sha=SHA256.Create())using(var file=File.OpenRead(engine)){if(BitConverter.ToString(sha.ComputeHash(file)).Replace("-","").ToLowerInvariant()!=BuildInfo.EngineSha256)throw new InvalidDataException("安装引擎校验失败，请重新获取安装包。");}
+        if(progress!=null)progress.Report(new SetupProgress(30,all?"等待管理员授权并安装":"正在安装程序"));
         var start=new ProcessStartInfo(engine,Arguments(all,directory,desktop,menu)){UseShellExecute=all,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden};if(all)start.Verb="runas";
         using(var process=Process.Start(start)){process.WaitForExit();return process.ExitCode;}
       }finally{try{if(File.Exists(engine))File.Delete(engine);Directory.Delete(temp,false);}catch(IOException){}catch(UnauthorizedAccessException){}}
@@ -76,7 +90,7 @@ namespace ToZ.Setup {
     }
   }
   class InstallerForm:Form {
-    Panel content,side,footer;Label status,stepOne,stepTwo,stepThree;SoftButton next,back,cancel;ChoiceCard current,all;TextBox pathInput;HabitCard desktopChoice,menuChoice,startupChoice;CheckBox launch;
+    Panel content,side,footer;Label status,stepOne,stepTwo,stepThree;SoftButton next,back,cancel;ChoiceCard current,all;TextBox pathInput;HabitCard desktopChoice,menuChoice,startupChoice;CheckBox launch;QuietProgress installProgress;ProgressCaption progressCaption;
     int step;float uiScale=1;bool allUsers,desktop=true,startMenu=true,autoStart,busy=false,complete=false;string directory,currentPath,machinePath,notice="";
     int PageWidth{get{return (int)(content.ClientSize.Width/uiScale);}}
     void ScalePage(){if(uiScale!=1)foreach(Control control in content.Controls)control.Scale(new SizeF(uiScale,uiScale));}
@@ -123,19 +137,29 @@ namespace ToZ.Setup {
     void FinishPage(){Heading("为今天，做好一件小事。","ToZ 已安装完成。\n你的任务、计划与每一次开始，都有了自己的位置。");launch=new CheckBox{Text="现在启动 ToZ",Checked=true,Bounds=new Rectangle(56,220,540,36),ForeColor=Palette.Ink,Font=bodyFont};content.Controls.Add(launch);Copy("无需登录，离线就能使用。\n从托盘或菜单可以随时唤回桌面浮窗。\n关闭主窗口默认收至托盘。",292,96);}
     void SavePage(){if(step==0){directory=InstallEngine.ValidatePath(pathInput.Text);allUsers=all.Checked;if(allUsers)machinePath=directory;else currentPath=directory;}if(step==1){desktop=desktopChoice.Checked;startMenu=menuChoice.Checked;autoStart=startupChoice.Checked;}}
     async Task Next(){try{if(step<2){SavePage();ShowStep(step+1);return;}if(step==3){if(complete&&launch.Checked){string app=Path.Combine(directory,"ToZ.exe");Process.Start(new ProcessStartInfo(app){UseShellExecute=true,WorkingDirectory=directory});}Close();return;}await Install();}catch(Exception error){MessageBox.Show(this,error.Message,"ToZ 安装",MessageBoxButtons.OK,MessageBoxIcon.Information);}}
+    void ShowProgressPage(){
+      content.SuspendLayout();foreach(Control control in content.Controls.Cast<Control>().ToArray())control.Dispose();content.Controls.Clear();content.AutoScrollPosition=Point.Empty;
+      Heading("正在为你准备。","把轻一点的工作方式，放到桌面上。");
+      installProgress=new QuietProgress{Bounds=new Rectangle(40,178,PageWidth-80,7),Anchor=AnchorStyles.Top|AnchorStyles.Left|AnchorStyles.Right};content.Controls.Add(installProgress);
+      progressCaption=new ProgressCaption{Font=smallFont,Bounds=new Rectangle(40,202,PageWidth-80,28),Anchor=AnchorStyles.Top|AnchorStyles.Left|AnchorStyles.Right};content.Controls.Add(progressCaption);
+      Copy("程序与任务分开保存，安装不会清空已有任务。",254,42);
+      stepOne.Text="✓   安装位置";stepTwo.Text="✓   使用习惯";stepOne.ForeColor=stepTwo.ForeColor=Color.FromArgb(148,183,160);stepThree.Text="❸   准备就绪";
+      next.Visible=back.Visible=cancel.Visible=false;status.Text="正在安装…";ScalePage();content.ResumeLayout(false);
+    }
+    void SetProgress(int percent,string message){installProgress.Value=percent;progressCaption.Percent=percent;progressCaption.Message=message;progressCaption.Invalidate();}
     async Task Install(){
 #if UI_PREVIEW
       await Task.Yield();throw new InvalidOperationException("界面验收程序不能执行安装。");
 #else
-      busy=true;next.Enabled=false;back.Enabled=false;cancel.Enabled=false;content.Controls.Clear();Heading("正在为你准备 ToZ。","正在复制程序并登记安装信息，请稍候。\n这不会清空你的任务。");var progress=new ProgressBar{Style=ProgressBarStyle.Marquee,MarqueeAnimationSpeed=28,Bounds=new Rectangle(40,218,PageWidth-80,8),Anchor=AnchorStyles.Top|AnchorStyles.Left|AnchorStyles.Right};content.Controls.Add(progress);Copy("安装进度由 Windows 和安装引擎处理。\n完成后会自动进入下一步。",252,70);ScalePage();status.Text="正在安装…";
-      try{int code=await Task.Run(()=>InstallEngine.Run(allUsers,directory,desktop,startMenu));if(code!=0)throw new InvalidOperationException(code==1223?"已取消管理员授权，可重试或返回选择仅为当前用户安装。":"安装未完成（代码 "+code+"）。可返回检查安装目录后重试。");if(!File.Exists(Path.Combine(directory,"ToZ.exe")))throw new IOException("安装引擎未能写入 ToZ，请检查安装目录的访问权限。");complete=true;try{InstallEngine.SetStartup(autoStart,Path.Combine(directory,"ToZ.exe"));}catch(Exception error){notice="安装完成；启动项未保存："+error.Message;}ShowStep(3);}
+      busy=true;next.Enabled=false;back.Enabled=false;cancel.Enabled=false;ShowProgressPage();var reporter=new Progress<SetupProgress>(value=>{if(busy&&installProgress!=null&&!installProgress.IsDisposed)SetProgress(value.Percent,value.Message);});
+      try{int code=await Task.Run(()=>InstallEngine.Run(allUsers,directory,desktop,startMenu,reporter));if(code!=0)throw new InvalidOperationException(code==1223?"已取消管理员授权，可重试或返回选择仅为当前用户安装。":"安装未完成（代码 "+code+"）。可返回检查安装目录后重试。");if(!File.Exists(Path.Combine(directory,"ToZ.exe")))throw new IOException("安装引擎未能写入 ToZ，请检查安装目录的访问权限。");SetProgress(95,"正在保存使用习惯");complete=true;try{InstallEngine.SetStartup(autoStart,Path.Combine(directory,"ToZ.exe"));}catch(Exception error){notice="安装完成；启动项未保存："+error.Message;}SetProgress(100,"安装完成");await Task.Delay(120);ShowStep(3);}
       catch(Win32Exception error){ShowStep(2);if(error.NativeErrorCode!=1223)throw;status.Text="已取消管理员授权，可重试或返回选择当前用户安装。";}
       catch{ShowStep(2);throw;}
-      finally{busy=false;next.Enabled=true;back.Enabled=true;cancel.Enabled=true;}
+      finally{busy=false;next.Enabled=true;back.Enabled=true;cancel.Enabled=true;next.Visible=true;back.Visible=step>0&&step<3;cancel.Visible=step!=3;}
 #endif
     }
 #if UI_PREVIEW
-    internal async void Review(string output){try{Directory.CreateDirectory(output);await Task.Delay(150);CheckSurfaces(this);SaveScreenshot(output,"01-location.png");pathInput.Text=@"C:\Apps\ToZ 界面验收";await Next();desktopChoice.Checked=false;await Next();if(directory!=@"C:\Apps\ToZ 界面验收"||desktop||!startMenu||autoStart)throw new Exception("导航没有保留目录与安装习惯");SaveScreenshot(output,"03-ready.png");ShowStep(1);if(desktopChoice.Checked)throw new Exception("返回后快捷方式选项丢失");CheckSurfaces(this);desktopChoice.Checked=true;menuChoice.Checked=false;startupChoice.Checked=true;CheckSurfaces(this);SaveScreenshot(output,"02-habits.png");desktopChoice.Checked=false;menuChoice.Checked=true;startupChoice.Checked=false;ShowStep(0);all.Checked=true;CheckSurfaces(this);if(!allUsers||pathInput.Text!=machinePath)throw new Exception("所有用户范围没有更新路径");current.Checked=true;if(pathInput.Text!=@"C:\Apps\ToZ 界面验收")throw new Exception("切换范围没有保留目录");ShowStep(3);SaveScreenshot(output,"04-finish.png");if(!InstallEngine.Arguments(true,@"C:\Apps\ToZ 空格",false,true).EndsWith(@"/D=C:\Apps\ToZ 空格"))throw new Exception("安装引擎参数错误");foreach(var invalid in new[]{@"C:\",@"relative\ToZ",@"\\server\ToZ","C:\\Apps\\\"bad"}){bool refused=false;try{InstallEngine.ValidatePath(invalid);}catch(ArgumentException){refused=true;}if(!refused)throw new Exception("未拒绝无效目录");}File.WriteAllText(Path.Combine(output,"result.txt"),"PASS: location/habits/ready/finish; navigation persistence; current/all-user paths; Unicode and spaces; backend flags; invalid paths; control background pixels in checked/unchecked and enabled/disabled states. No real installation, elevation or registry writes.");Close();}catch(Exception e){File.WriteAllText(Path.Combine(output,"result.txt"),"FAIL: "+e);Environment.Exit(1);}}
+    internal async void Review(string output){try{Directory.CreateDirectory(output);await Task.Delay(150);CheckSurfaces(this);SaveScreenshot(output,"01-location.png");pathInput.Text=@"C:\Apps\ToZ 界面验收";await Next();desktopChoice.Checked=false;await Next();if(directory!=@"C:\Apps\ToZ 界面验收"||desktop||!startMenu||autoStart)throw new Exception("导航没有保留目录与安装习惯");SaveScreenshot(output,"03-ready.png");ShowStep(1);if(desktopChoice.Checked)throw new Exception("返回后快捷方式选项丢失");CheckSurfaces(this);desktopChoice.Checked=true;menuChoice.Checked=false;startupChoice.Checked=true;CheckSurfaces(this);SaveScreenshot(output,"02-habits.png");desktopChoice.Checked=false;menuChoice.Checked=true;startupChoice.Checked=false;ShowStep(0);all.Checked=true;CheckSurfaces(this);if(!allUsers||pathInput.Text!=machinePath)throw new Exception("所有用户范围没有更新路径");current.Checked=true;if(pathInput.Text!=@"C:\Apps\ToZ 界面验收")throw new Exception("切换范围没有保留目录");ShowStep(2);ShowProgressPage();SetProgress(40,"正在安装程序");SaveScreenshot(output,"05-progress.png");foreach(int value in new[]{0,40,100}){SetProgress(value,"检查进度");using(var bitmap=new Bitmap(installProgress.Width,installProgress.Height)){installProgress.DrawToBitmap(bitmap,installProgress.ClientRectangle);int x=(int)(bitmap.Width*.7),y=bitmap.Height/2;Color expected=value==100?Color.FromArgb(127,152,136):Color.FromArgb(62,62,66);if(bitmap.GetPixel(x,y).ToArgb()!=expected.ToArgb()||progressCaption.Percent!=value)throw new Exception("进度条绘制或百分比错误");}}ShowStep(3);SaveScreenshot(output,"04-finish.png");if(!InstallEngine.Arguments(true,@"C:\Apps\ToZ 空格",false,true).EndsWith(@"/D=C:\Apps\ToZ 空格"))throw new Exception("安装引擎参数错误");foreach(var invalid in new[]{@"C:\",@"relative\ToZ",@"\\server\ToZ","C:\\Apps\\\"bad"}){bool refused=false;try{InstallEngine.ValidatePath(invalid);}catch(ArgumentException){refused=true;}if(!refused)throw new Exception("未拒绝无效目录");}File.WriteAllText(Path.Combine(output,"result.txt"),"PASS: location/habits/ready/finish; navigation persistence; current/all-user paths; Unicode and spaces; backend flags; invalid paths; custom progress 0/40/100%; control background pixels in checked/unchecked and enabled/disabled states. No real installation, elevation or registry writes.");Close();}catch(Exception e){File.WriteAllText(Path.Combine(output,"result.txt"),"FAIL: "+e);Environment.Exit(1);}}
     void CheckSurfaces(Control parent){foreach(Control control in parent.Controls){
       if(control is SoftButton||control is ChoiceCard||control is HabitCard){
         bool enabled=control.Enabled;

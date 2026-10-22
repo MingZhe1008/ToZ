@@ -22,6 +22,7 @@ const icons = {
   plus: '<path d="M12 5v14M5 12h14"/>', close: '<path d="m6 6 12 12M6 18 18 6"/>', check: '<path d="m5 12 4 4L19 6"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
+  cursor: '<path d="m5 3 14 9-7 1-3 7-4-17Z"/>',
   moon: '<path d="M20 15.5A9 9 0 0 1 8.5 4 9 9 0 1 0 20 15.5Z"/>',
   calendar: '<rect x="4" y="5" width="16" height="16" rx="3"/><path d="M8 3v4m8-4v4M4 10h16M8 14h2m4 0h2m-8 3h2"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/>',
@@ -550,6 +551,7 @@ function resolveContext(element){
   return task?{kind:'task',id:task.id,label:task.title}:null;
 }
 function openApplicationMenu(button){
+  if(button.getAttribute('aria-expanded')==='true'){contextMenu.close(true);return;}
   const buttons=[...button.parentElement.querySelectorAll('[data-menu]')];buttons.forEach(item=>item.tabIndex=item===button?0:-1);
   contextMenu.openAt(button,{kind:'menubar',menu:button.dataset.menu,label:button.textContent});
 }
@@ -563,15 +565,14 @@ document.addEventListener('keydown',event=>{
   }
   if(event.key==='ArrowDown'){event.preventDefault();openApplicationMenu(button);}
 });
-document.addEventListener('pointerover',event=>{const button=event.target.closest('[data-menu]');if(button&&button.getAttribute('aria-expanded')!=='true'&&button.parentElement.querySelector('[aria-expanded="true"]'))openApplicationMenu(button);});
 if(!native){const bar=document.querySelector('.application-menubar').cloneNode(true);bar.classList.add('browser-menubar');document.querySelector('.app-window').before(bar);}
 function contextItems(entity){
   if(entity.kind==='menubar'){
     const task=tasks.find(t=>t.id===selected&&!t.deletedAt);
     const menus={
       toz:[{key:'app-about',label:'关于 ToZ',icon:'info'},{separator:true},{key:'app-settings',label:'设置…',icon:'settings',shortcut:'Ctrl ,'},{separator:true},{key:'app-export',label:'导出完整备份…',icon:'shield'},...(native?[{key:'app-import',label:'从备份恢复…',icon:'history'},{separator:true},{key:'app-quit',label:'退出 ToZ',icon:'external'}]:[])],
-      task:[{key:'app-new',label:'添加待办',icon:'plus',shortcut:'N'},{key:'app-reschedule',label:'调整计划…',icon:'calendar',disabled:!task||task.done},{separator:true},...(task?contextItems({kind:'task',id:task.id}):[{key:'app-task-menu',label:'先选择一项任务',icon:'sliders',disabled:true}]),{separator:true},{key:'app-trash',label:'打开回收站',icon:'trash'}],
-      view:[{key:'app-today',label:'今天',icon:'sun',checked:view==='today'},{key:'app-calendar',label:'日历',icon:'calendar',checked:view==='calendar'},{key:'app-gantt',label:'甘特图',icon:'gantt',checked:view==='gantt'},{separator:true},{key:'app-search',label:'搜索任务',icon:'search',shortcut:'Ctrl K'},{key:'app-widget',label:widgetVisible?'隐藏桌面浮窗':'显示桌面浮窗',icon:'layers'},{separator:true},{key:'app-appearance',label:'外观与阅读…',icon:'settings'}],
+      task:[{key:'app-new',label:'添加待办',icon:'plus',shortcut:'N'},{separator:true},{key:'app-trash',label:'打开回收站',icon:'trash'}],
+      view:[{key:'app-light',label:'浅色外观',icon:'sun',checked:!dark},{key:'app-dark',label:'深色外观',icon:'moon',checked:dark},{separator:true},{key:'app-widget',label:'桌面浮窗',icon:'layers',checked:widgetVisible},{key:'app-recover',label:'恢复浮窗交互',icon:'cursor'}],
       help:[{key:'app-guide',label:'使用说明与快捷键',icon:'info'},{key:'app-data',label:'数据与备份…',icon:'shield'},{separator:true},{key:'app-about',label:'关于 ToZ',icon:'info'}]
     };return menus[entity.menu]||[];
   }
@@ -604,6 +605,8 @@ function contextItems(entity){
 function contextCommand(key,entity,value){
   if(['app','widget','menubar'].includes(entity.kind)){
     if(['app-today','app-calendar','app-gantt'].includes(key)){view=key.slice(4);calendarDetailOpen=false;query='';$('#global-search').value='';$('#task-search').value='';render();}
+    if(key==='app-light'||key==='app-dark'){dark=key==='app-dark';save();applyAppearance();reportRenderer();}
+    if(key==='app-recover'){if(native)nativeCommand('click-through',false);else toast('已恢复浮窗交互');}
     if(key==='app-appearance')openSettings('appearance');
     if(key==='app-data')openSettings('data');
     if(key==='app-import')nativeCommand('import');

@@ -53,7 +53,7 @@ export function mountContextMenu({resolve,items,onCommand,icon=()=>'',onRootArro
   menu.addEventListener('pointerover',event=>{const button=event.target.closest('button');if(!button)return;if(models.get(button)?.children)openSubmenu(button);else closeSubmenu();});
   const leave=event=>{if(event.relatedTarget?.closest?.('.context-menu'))return;clearTimeout(hideTimer);hideTimer=setTimeout(closeSubmenu,200);};
   menu.addEventListener('pointerleave',leave);submenu.addEventListener('pointerleave',leave);submenu.addEventListener('pointerenter',()=>clearTimeout(hideTimer));
-  document.addEventListener('pointerdown',event=>{if(!event.target.closest('.context-menu'))close();},true);
+  document.addEventListener('pointerdown',event=>{if(!event.target.closest('.context-menu')&&!event.target.closest('[data-menu]'))close();},true);
   document.addEventListener('scroll',event=>{if(event.target!==menu&&event.target!==submenu)close();},true);
   window.addEventListener('resize',()=>close());window.addEventListener('blur',()=>close());
   document.addEventListener('keydown',event=>{
