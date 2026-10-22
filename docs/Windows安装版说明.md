@@ -138,10 +138,10 @@
 ```powershell
 npm ci
 npm run install:runtime
-npm test
-npm run smoke
 npm run build:win
 ```
+
+默认只对本轮修改内容及其直接影响的行为做定向测试或交互检查，纯文档 / 技能修改只检查内容、引用和差异，不重建安装包。构建不会自动附带完整测试或验收。仅当用户明确指定时，才执行对应完整流程：`npm test` 为全量领域 / 存储测试，`npm run smoke` 为完整源码隔离验收；完整打包程序验收同样需要用户明确指定。不要因提交、推送或打包自行执行整套流程。
 
 若 Node 下载通道无法访问 GitHub，可以从 Electron 官方 release 下载与锁定版本对应的 Windows x64 ZIP，按 npm 包中的 `checksums.json` 校验 SHA-256 后放入 `node_modules/electron/dist`，并写入 `node_modules/electron/path.txt` 为 `electron.exe`。此前交付环境的运行时已按此方式校验；新克隆仓库不含 node_modules 或运行时，需自行安装。
 
