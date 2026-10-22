@@ -22,6 +22,10 @@ export function mountDesktopSettings(toast,{setReading}={}){
   });
   selectSettingsTab();
   if(!window.toz)return;
+  const guide=document.querySelector('#guide-dialog');
+  guide.querySelector('.dialog-eyebrow').textContent='ToZ · 使用指南';
+  guide.querySelectorAll('.guide-item p')[2].textContent='新建、完成或改期，各窗口同步更新。桌面浮窗可以拖动、折叠和调节透明度。';
+  guide.querySelector('.prototype-note p').textContent='任务保存在本机。F10 进入菜单，方向键切换命令，Escape 收起菜单。Ctrl+Alt+T 可唤回浮窗并恢复鼠标交互。';
   const section=dialog.querySelector('#native-settings');
   section.innerHTML=[
     ['autoLaunch','登录后自动启动','仅为当前 Windows 账户设置'],
@@ -33,7 +37,10 @@ export function mountDesktopSettings(toast,{setReading}={}){
   dialog.querySelector('.browser-only-note')?.remove();
   dialog.querySelector('.reset-button')?.remove();
   dialog.querySelector('#native-window-actions').innerHTML='<button class="button secondary" data-native-action="desktop-shortcut">创建桌面快捷方式</button><button class="button secondary" data-native-action="click-through">开启鼠标穿透</button><button class="button secondary" data-native-action="recover-interaction">恢复浮窗交互</button>';
-  dialog.querySelector('#native-data-actions').innerHTML='<button class="button secondary" data-native-action="open-data">打开数据目录</button><button class="button secondary" data-native-action="import">恢复 / 导入备份…</button>';
+  dialog.querySelector('#native-data-actions').innerHTML='<div class="setting-row"><div><b>从备份恢复</b><small>确认后替换；先另存安全副本</small></div><button class="button secondary" data-native-action="import">恢复备份…</button></div>';
+  dialog.querySelector('.data-storage-description').textContent='使用 SQLite 保存任务，无需账户或网络。';
+  dialog.querySelector('.data-backup-description').textContent='保留最近十四份每日最新快照。';
+  dialog.querySelector('.settings-status-text').textContent='自动保存';
   dialog.querySelector('#native-about-actions').innerHTML='<button class="button secondary" data-native-action="quit">退出 ToZ</button>';
   section.addEventListener('change',async event=>{
     const input=event.target.closest('[data-preference]');if(!input)return;input.disabled=true;

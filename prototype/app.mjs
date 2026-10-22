@@ -290,8 +290,9 @@ async function setReadingPreference(key,value){
   applyAppearance();
 }
 async function openSettings(tab='appearance'){
-  if(native?.surface==='widget'){await nativeCommand('open-main',{action:'settings',tab});return;}
-  if(native)await refreshDesktopSettings();selectSettingsTab(tab);openDialog('#settings-dialog');
+  if(native&&native.surface!=='settings'){await nativeCommand('open-settings',{tab});return;}
+  if(native)await refreshDesktopSettings();selectSettingsTab(tab,{focus:native?.surface==='settings'});
+  if(native?.surface!=='settings')openDialog('#settings-dialog');
 }
 function openProject(name=null){
   if(native?.surface==='widget'){nativeCommand('open-main',{action:'project',name});return;}
@@ -389,6 +390,7 @@ function setMode(next) {
   $('#widget').style.removeProperty('left');$('#widget').style.removeProperty('top');$('#widget').style.removeProperty('right');
 }
 document.addEventListener('click',async event=>{
+  const menuButton=event.target.closest('[data-menu]');if(menuButton){openApplicationMenu(menuButton);return;}
   const close=event.target.closest('[data-close]'); if(close){close.closest('dialog').close();return;}
   const button=event.target.closest('[data-mode]'); if(button?.tagName==='BUTTON'){setMode(button.dataset.mode);return;}
   const nav=event.target.closest('[data-view]'); if(nav){if(nav.dataset.view.startsWith('project:')){const name=nav.dataset.view.slice(8),now=performance.now();if(lastProjectClick?.name===name&&now-lastProjectClick.at<400){lastProjectClick=null;openProject(name);return;}lastProjectClick={name,at:now};}beforeGlobalSearch=null;$('#global-search').value='';view=nav.dataset.view;calendarDetailOpen=false;query='';$('#task-search').value='';render();return;}
@@ -525,9 +527,14 @@ if(native?.surface==='quick-add'){
 }
 mountDatePickers();hydrateIcons();mountDesktopSettings(toast,{setReading:setReadingPreference});if(!saveError)ensureRecurrences();render();
 if(native){
+  if(native.surface==='settings'){
+    $('#settings-dialog').show();
+    $('#settings-dialog').addEventListener('close',()=>nativeCommand('close-settings'));
+    await openSettings(new URLSearchParams(location.search).get('tab')||'appearance');
+  }
   if(native.surface==='quick-add')openNew(new URLSearchParams(location.search).get('date')||undefined);
   reportRenderer();
-  native.onState(snapshot=>{if(snapshot.version>dataVersion)applySnapshot(snapshot);});
+  native.onState(snapshot=>{if(snapshot.version>dataVersion)applySnapshot(snapshot);if(native.surface==='settings')refreshDesktopSettings().catch(error=>toast(error.message));});
   native.onCommand(async command=>{if(!command)return;if(['gantt','calendar','today'].includes(command.action)){$('dialog[open]')?.close();view=command.action;calendarDetailOpen=false;render();reportRenderer();}if(command.action==='new')openNew(command.date);if(command.action==='project')openProject(command.name);if(command.action==='edit'){selected=command.id;view='all';render();openEdit(tasks.find(t=>t.id===command.id));}if(command.action==='edit-subtask')openSubtaskEdit(command.id,command.subId);if(command.action==='trash')openTrash();if(command.action==='add-subtask'){selected=command.id;view='all';render();$('#subtask-form input')?.focus();}if(command.action==='settings')await openSettings(command.tab);if(command.action==='select'||command.action==='reschedule'){selected=command.id;view='all';render();if(command.action==='reschedule')openReschedule(command.id);}});
   setInterval(()=>{if(refreshToday()){calendarMonth=TODAY.slice(0,7);ensureRecurrences();render();}},30000);
   window.addEventListener('focus',()=>{if(refreshToday()){ensureRecurrences();render();}});
@@ -542,7 +549,32 @@ function resolveContext(element){
   const row=element.closest('[data-task],[data-reorder-kind="task"]'),id=row?.dataset.task||row?.dataset.reorderId,task=tasks.find(t=>t.id===id&&!t.deletedAt);
   return task?{kind:'task',id:task.id,label:task.title}:null;
 }
+function openApplicationMenu(button){
+  const buttons=[...button.parentElement.querySelectorAll('[data-menu]')];buttons.forEach(item=>item.tabIndex=item===button?0:-1);
+  contextMenu.openAt(button,{kind:'menubar',menu:button.dataset.menu,label:button.textContent});
+}
+document.addEventListener('keydown',event=>{
+  const button=event.target.closest('[data-menu]');
+  if(event.key==='F10'&&!event.shiftKey){event.preventDefault();document.querySelector('.desktop-main [data-menu],.browser-menubar [data-menu]')?.focus();return;}
+  if(!button)return;
+  if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
+    event.preventDefault();const buttons=[...button.parentElement.querySelectorAll('[data-menu]')],index=buttons.indexOf(button),next=buttons[event.key==='Home'?0:event.key==='End'?buttons.length-1:(index+(event.key==='ArrowLeft'?-1:1)+buttons.length)%buttons.length];
+    buttons.forEach(item=>item.tabIndex=item===next?0:-1);next.focus();
+  }
+  if(event.key==='ArrowDown'){event.preventDefault();openApplicationMenu(button);}
+});
+document.addEventListener('pointerover',event=>{const button=event.target.closest('[data-menu]');if(button&&button.getAttribute('aria-expanded')!=='true'&&button.parentElement.querySelector('[aria-expanded="true"]'))openApplicationMenu(button);});
+if(!native){const bar=document.querySelector('.application-menubar').cloneNode(true);bar.classList.add('browser-menubar');document.querySelector('.app-window').before(bar);}
 function contextItems(entity){
+  if(entity.kind==='menubar'){
+    const task=tasks.find(t=>t.id===selected&&!t.deletedAt);
+    const menus={
+      toz:[{key:'app-about',label:'关于 ToZ',icon:'info'},{separator:true},{key:'app-settings',label:'设置…',icon:'settings',shortcut:'Ctrl ,'},{separator:true},{key:'app-export',label:'导出完整备份…',icon:'shield'},...(native?[{key:'app-import',label:'从备份恢复…',icon:'history'},{separator:true},{key:'app-quit',label:'退出 ToZ',icon:'external'}]:[])],
+      task:[{key:'app-new',label:'添加待办',icon:'plus',shortcut:'N'},{key:'app-reschedule',label:'调整计划…',icon:'calendar',disabled:!task||task.done},{separator:true},...(task?contextItems({kind:'task',id:task.id}):[{key:'app-task-menu',label:'先选择一项任务',icon:'sliders',disabled:true}]),{separator:true},{key:'app-trash',label:'打开回收站',icon:'trash'}],
+      view:[{key:'app-today',label:'今天',icon:'sun',checked:view==='today'},{key:'app-calendar',label:'日历',icon:'calendar',checked:view==='calendar'},{key:'app-gantt',label:'甘特图',icon:'gantt',checked:view==='gantt'},{separator:true},{key:'app-search',label:'搜索任务',icon:'search',shortcut:'Ctrl K'},{key:'app-widget',label:widgetVisible?'隐藏桌面浮窗':'显示桌面浮窗',icon:'layers'},{separator:true},{key:'app-appearance',label:'外观与阅读…',icon:'settings'}],
+      help:[{key:'app-guide',label:'使用说明与快捷键',icon:'info'},{key:'app-data',label:'数据与备份…',icon:'shield'},{separator:true},{key:'app-about',label:'关于 ToZ',icon:'info'}]
+    };return menus[entity.menu]||[];
+  }
   if(entity.kind==='app')return [
     {key:'app-new',label:'添加待办',icon:'plus',shortcut:'N'},
     {key:'app-search',label:'搜索任务',icon:'search',shortcut:'Ctrl K'},
@@ -570,7 +602,15 @@ function contextItems(entity){
   out.push({separator:true},{key:'delete-task',label:task.repeatId?'本期任务移入回收站':'移入回收站',icon:'trash',danger:true});return out;
 }
 function contextCommand(key,entity,value){
-  if(entity.kind==='app'||entity.kind==='widget'){
+  if(['app','widget','menubar'].includes(entity.kind)){
+    if(['app-today','app-calendar','app-gantt'].includes(key)){view=key.slice(4);calendarDetailOpen=false;query='';$('#global-search').value='';$('#task-search').value='';render();}
+    if(key==='app-appearance')openSettings('appearance');
+    if(key==='app-data')openSettings('data');
+    if(key==='app-import')nativeCommand('import');
+    if(key==='app-trash')openTrash();
+    if(key==='app-guide')openDialog('#guide-dialog');
+    if(key==='app-reschedule')openReschedule(selected);
+    if(!key.startsWith('app-')){contextCommand(key,{kind:'task',id:selected},value);return;}
     if(key==='app-new')openNew();
     if(key==='app-search'){if(mode==='widget')setMode('both');$('#global-search').focus();}
     if(key==='app-settings')openSettings();
@@ -659,14 +699,14 @@ function executePurge(event){
     $('#purge-dialog').close();renderTrash();reportRenderer();$('#trash-search').focus();toast('已彻底删除所选内容');
   }catch(error){$('#purge-form .form-error').textContent=error.message;}finally{button.disabled=false;}
 }
-function openTrash(){if(native?.surface==='widget'){nativeCommand('open-main',{action:'trash'});return;}$('dialog[open]')?.close();trashQuery='';$('#trash-search').value='';renderTrash();openDialog('#trash-dialog');}
+function openTrash(){if(native?.surface==='widget'){nativeCommand('open-main',{action:'trash'});return;}(native?.surface==='settings'?$('dialog[open]:not(#settings-dialog)'):$('dialog[open]'))?.close();trashQuery='';$('#trash-search').value='';renderTrash();openDialog('#trash-dialog');}
 function initializeActions(){
   document.addEventListener('input',event=>{
     if(event.target.name!=='startDate'||!['new-form','reschedule-form'].includes(event.target.form?.id))return;
     const form=event.target.form,start=event.target.value,end=form.elements.date;
     if(start&&end.value&&start>end.value){end.value=start;syncDatePickers();toast('完成日期已跟随开始日期调整');}
   },true);
-  contextMenu=mountContextMenu({resolve:resolveContext,items:contextItems,onCommand:contextCommand,icon:svg});
+  contextMenu=mountContextMenu({resolve:resolveContext,items:contextItems,onCommand:contextCommand,icon:svg,onRootArrow:(origin,delta)=>{const buttons=[...origin.parentElement.querySelectorAll('[data-menu]')];openApplicationMenu(buttons[(buttons.indexOf(origin)+delta+buttons.length)%buttons.length]);}});
   document.addEventListener('dblclick',event=>{const row=event.target.closest('[data-subtask-row]');if(row&&!event.target.closest('button'))openSubtaskEdit(row.dataset.task,row.dataset.subtaskRow);});
   $('#subtask-edit-form').addEventListener('submit',event=>{event.preventDefault();const form=event.currentTarget;try{const task=tasks.find(t=>t.id===subtaskEdit.taskId);const dates={planStart:form.elements.startDate.value||null,plan:form.elements.date.value||null};if(subtaskEdit.subId)editSubtask(task,subtaskEdit.subId,form.elements.title.value,dates);else addSubtask(task,form.elements.title.value,dates.planStart,dates.plan);if(!save()){form.querySelector('.form-error').textContent=saveError;return;}render();$('#subtask-edit-dialog').close();toast('子任务已保存');}catch(error){form.querySelector('.form-error').textContent=error.message;}});
   $('#delete-project-form').addEventListener('change',updateDeleteProjectHint);

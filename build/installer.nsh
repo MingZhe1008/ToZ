@@ -23,8 +23,10 @@ Var ToZAutoStart
 Var ToZDesktopCheck
 Var ToZMenuCheck
 Var ToZAutoCheck
+Var ToZHostStartup
 
 !macro customInit
+  StrCpy $ToZHostStartup "0"
   StrCpy $ToZDesktop ${BST_CHECKED}
   StrCpy $ToZStartMenu ${BST_CHECKED}
   StrCpy $ToZAutoStart ${BST_UNCHECKED}
@@ -33,6 +35,11 @@ Var ToZAutoCheck
     StrCpy $ToZAutoStart ${BST_CHECKED}
   ${EndIf}
   ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/HOSTSTARTUP=" $R1
+  ${IfNot} ${Errors}
+    StrCpy $ToZHostStartup $R1
+  ${EndIf}
   ClearErrors
   ${GetOptions} $R0 "/DESKTOP=" $R1
   ${IfNot} ${Errors}
@@ -100,10 +107,12 @@ FunctionEnd
   ${Else}
     Delete "$SMPROGRAMS\ToZ.lnk"
   ${EndIf}
+  ${If} $ToZHostStartup != "1"
   ${If} $ToZAutoStart == ${BST_CHECKED}
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ToZ" '$\"$INSTDIR\ToZ.exe$\" --autostart'
   ${Else}
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ToZ"
+  ${EndIf}
   ${EndIf}
 !macroend
 

@@ -6,13 +6,14 @@ const {createStartup}=require('./startup.cjs');
 const {resizeWidgetHeight}=require('./widget-size.cjs');
 const {widgetMenuTemplate}=require('./widget-menu.cjs');
 const APP_ID='com.toz.desktop';
-const uiReview=process.argv.includes('--ui-v1-test');
+const systemReview=process.argv.includes('--ui-system-test');
+const uiReview=process.argv.includes('--ui-v1-test')||systemReview;
 const smoke=process.argv.includes('--smoke-test')||uiReview;
 const dataArg=process.argv.find(a=>a.startsWith('--toz-data='));
 if(uiReview&&(!dataArg||!path.resolve(dataArg.slice(11)).startsWith(path.resolve('.runtime')+path.sep)))throw new Error('界面定向验收必须使用工作目录 .runtime 下的独立数据目录');
 if(dataArg)app.setPath('userData',path.resolve(dataArg.slice(11)));
 app.setName('ToZ');app.setAppUserModelId(APP_ID);
-let mainWindow,widgetWindow,quickAddWindow,tray,store,startup,quitting=false,widgetIgnore=false;
+let mainWindow,widgetWindow,quickAddWindow,settingsWindow,tray,store,startup,quitting=false,widgetIgnore=false;
 const rendererReports=new Map();
 const miniSamples=new Set();
 const iconPath=path.join(__dirname,'..','build','icon.png');
@@ -25,8 +26,8 @@ if(!lock){app.quit();}else{
 function startupState(){return startup.state();}
 function showMain(command){if(!mainWindow)return;if(mainWindow.isMinimized())mainWindow.restore();mainWindow.show();mainWindow.focus();if(command)mainWindow.webContents.send('toz:ui-command',command);}
 function titleBarTheme(dark){return {color:dark?'#252527':'#f8f8f7',symbolColor:dark?'#f0f0f2':'#252527',height:38};}
-function applyTheme(){const dark=store.snapshot().dark;for(const window of [mainWindow,quickAddWindow])if(window&&!window.isDestroyed()){window.setBackgroundColor(dark?'#29292c':'#ffffff');window.setTitleBarOverlay(titleBarTheme(dark));}}
-function broadcast(){applyTheme();const snapshot=store.snapshot();for(const w of [mainWindow,widgetWindow,quickAddWindow])if(w&&!w.isDestroyed())w.webContents.send('toz:state',snapshot);}
+function applyTheme(){const dark=store.snapshot().dark;for(const window of [mainWindow,quickAddWindow,settingsWindow])if(window&&!window.isDestroyed()){window.setBackgroundColor(dark?'#29292c':'#ffffff');window.setTitleBarOverlay(titleBarTheme(dark));}}
+function broadcast(){applyTheme();const snapshot=store.snapshot();for(const w of [mainWindow,widgetWindow,quickAddWindow,settingsWindow])if(w&&!w.isDestroyed())w.webContents.send('toz:state',snapshot);}
 function secure(window){window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('file:'))event.preventDefault();});}
 function fitBounds(bounds,fallback){
   const displays=screen.getAllDisplays();
@@ -75,13 +76,30 @@ async function openQuickAdd(date){
   if(!window.isDestroyed()){window.setTitle('新建待办 · ToZ');window.show();window.focus();}
   return true;
 }
+async function openSettingsWindow(tab='appearance'){
+  const selected=['appearance','startup','data','about'].includes(tab)?tab:'appearance';
+  if(settingsWindow&&!settingsWindow.isDestroyed()){
+    const existing=settingsWindow;
+    if(existing.webContents.isLoading())await new Promise(resolve=>{existing.webContents.once('did-finish-load',resolve);existing.once('closed',resolve);});
+    if(existing.isDestroyed())return false;
+    settingsWindow.webContents.send('toz:ui-command',{action:'settings',tab:selected});
+    if(settingsWindow.isMinimized())settingsWindow.restore();settingsWindow.show();settingsWindow.focus();return true;
+  }
+  const area=screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  const dark=store.snapshot().dark;
+  const window=new BrowserWindow({width:Math.min(980,area.width),height:Math.min(700,area.height),minWidth:680,minHeight:480,title:'ToZ 设置',titleBarStyle:'hidden',titleBarOverlay:titleBarTheme(dark),backgroundColor:dark?'#29292c':'#ffffff',icon:iconPath,show:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,additionalArguments:[...(smoke?['--toz-smoke']:[]),'--toz-settings']}});
+  settingsWindow=window;secure(window);
+  window.on('closed',()=>{if(settingsWindow===window)settingsWindow=null;rendererReports.delete('settings');});
+  try{await window.loadFile(path.join(__dirname,'..','prototype','index.html'),{query:{tab:selected}});}catch(error){if(!window.isDestroyed())window.destroy();throw error;}
+  if(!window.isDestroyed()){window.setTitle('ToZ 设置');window.show();window.focus();}return true;
+}
 function applyWidget(){const settings=store.settings();widgetWindow.setAlwaysOnTop(settings.widgetPinned);if(!smoke){if(settings.widgetVisible)widgetWindow.showInactive();else widgetWindow.hide();}if(settings.widgetCollapsed)resizeWidgetHeight(widgetWindow,68);}
 function rebuildTray(){if(!tray)return;const settings=store.settings();tray.setContextMenu(Menu.buildFromTemplate([
   {label:'打开 ToZ',click:()=>showMain()},
   {label:settings.widgetVisible?'隐藏桌面浮窗':'显示桌面浮窗',click:()=>{store.updateSettings({widgetVisible:!settings.widgetVisible});applyWidget();rebuildTray();broadcast();}},
   {label:'窗口始终置顶',type:'checkbox',checked:settings.widgetPinned,click:item=>{store.updateSettings({widgetPinned:item.checked});applyWidget();broadcast();}},
   {label:'解除鼠标穿透',enabled:widgetIgnore,click:()=>setIgnore(false)},
-  {type:'separator'},{label:'设置',click:()=>showMain({action:'settings'})},{label:'打开数据目录',click:()=>shell.openPath(store.directory)},
+  {type:'separator'},{label:'设置…',click:()=>openSettingsWindow()},{label:'打开数据目录',click:()=>shell.openPath(store.directory)},
   {type:'separator'},{label:'退出 ToZ',click:()=>app.quit()}
 ]));}
 function setIgnore(value){widgetIgnore=value;widgetWindow.setIgnoreMouseEvents(value,{forward:true});rebuildTray();}
@@ -91,7 +109,7 @@ function setWidgetCollapsed(value){
   store.updateSettings({widgetCollapsed:!!value});
   resizeWidgetHeight(widgetWindow,value?68:store.meta('widgetExpandedHeight',550));broadcast();
 }
-function trusted(event){return [mainWindow,widgetWindow,quickAddWindow].some(w=>w&&!w.isDestroyed()&&w.webContents===event.sender);}
+function trusted(event){return [mainWindow,widgetWindow,quickAddWindow,settingsWindow].some(w=>w&&!w.isDestroyed()&&w.webContents===event.sender);}
 function handlers(){
   ipcMain.on('toz:read',event=>{event.returnValue=trusted(event)?{ok:true,snapshot:store.snapshot()}:{ok:false,error:'无效窗口'};});
   ipcMain.on('toz:commit',(event,{snapshot,version})=>{
@@ -111,17 +129,20 @@ function handlers(){
     return {...store.settings(),...startupState(),dataPath:store.directory,version:app.getVersion(),packaged:app.isPackaged,clickThrough:widgetIgnore};
   });
   handle('toz:command',async(name,arg)=>{
+    const owner=BrowserWindow.getFocusedWindow()||mainWindow;
     switch(name){
       case 'smoke-ready':if(smoke){rendererReports.set(arg.surface,arg);if(arg.surface==='widget'&&arg.collapsed&&arg.miniTask)miniSamples.add(arg.miniTask);}return true;
       case 'open-main':showMain(arg);return true;
       case 'open-quick-add':return openQuickAdd(arg?.date);
+      case 'open-settings':return openSettingsWindow(arg?.tab);
+      case 'close-settings':settingsWindow?.close();return true;
       case 'widget-menu':{
         const settings=store.settings();
         Menu.buildFromTemplate(widgetMenuTemplate(settings,widgetIgnore,{
           add:()=>openQuickAdd(),collapse:()=>setWidgetCollapsed(!store.settings().widgetCollapsed),
           pin:checked=>{store.updateSettings({widgetPinned:checked});applyWidget();rebuildTray();broadcast();},
-          through:setIgnore,appearance:()=>showMain({action:'settings',tab:'appearance'}),
-          settings:()=>showMain({action:'settings',tab:'startup'}),main:()=>showMain()
+          through:setIgnore,appearance:()=>openSettingsWindow('appearance'),
+          settings:()=>openSettingsWindow('startup'),main:()=>showMain()
         })).popup({window:widgetWindow});
         return true;
       }
@@ -135,17 +156,17 @@ function handlers(){
       case 'open-data':return shell.openPath(store.directory);
       case 'desktop-shortcut':if(!app.isPackaged)throw new Error('请使用安装版创建快捷方式');return shell.writeShortcutLink(path.join(app.getPath('desktop'),'ToZ.lnk'),{target:process.execPath,cwd:path.dirname(process.execPath),description:'ToZ 离线待办',icon:process.execPath,iconIndex:0,appUserModelId:APP_ID});
       case 'export':{
-        const choice=await dialog.showSaveDialog(mainWindow,{title:'导出完整备份',defaultPath:`ToZ-备份-${new Date().toLocaleDateString('sv-SE')}.json`,filters:[{name:'ToZ 备份',extensions:['json']}]});
+        const choice=await dialog.showSaveDialog(owner,{title:'导出完整备份',defaultPath:`ToZ-备份-${new Date().toLocaleDateString('sv-SE')}.json`,filters:[{name:'ToZ 备份',extensions:['json']}]});
         if(choice.canceled)return false;
         const snapshot=store.snapshot();if(arg?.taskId){snapshot.tasks=snapshot.tasks.filter(t=>t.id===arg.taskId);snapshot.preferences.taskOrder=snapshot.tasks.map(t=>t.id);snapshot.recurrences=snapshot.recurrences.filter(s=>snapshot.tasks.some(t=>t.repeatId===s.id)).map(s=>({...s,active:false}));}fs.writeFileSync(choice.filePath,JSON.stringify({...snapshot,settings:store.settings(),exportedAt:new Date().toISOString()},null,2));return true;
       }
       case 'import':{
-        const choice=await dialog.showOpenDialog(mainWindow,{title:'恢复 ToZ / 导入原型数据',filters:[{name:'ToZ 备份',extensions:['json']}],properties:['openFile']});
+        const choice=await dialog.showOpenDialog(owner,{title:'恢复 ToZ / 导入原型数据',filters:[{name:'ToZ 备份',extensions:['json']}],properties:['openFile']});
         if(choice.canceled)return false;
         const filename=choice.filePaths[0];if(fs.statSync(filename).size>50*1024*1024)throw new Error('备份超过 50 MB');
         const snapshot=JSON.parse(fs.readFileSync(filename,'utf8'));
         const {validateSnapshot}=require('./store.cjs');if(snapshot.schema!==1)throw new Error('不支持此备份版本');validateSnapshot(snapshot);
-        const confirm=await dialog.showMessageBox(mainWindow,{type:'question',buttons:['取消','恢复数据'],defaultId:0,cancelId:0,title:'恢复数据',message:`恢复 ${snapshot.tasks.length} 项任务及其全部历史？`,detail:'将替换当前任务。恢复前会自动保存一份当前数据的安全副本。系统自启动等本机设置保持不变。'});
+        const confirm=await dialog.showMessageBox(owner,{type:'question',buttons:['取消','恢复数据'],defaultId:0,cancelId:0,title:'恢复数据',message:`恢复 ${snapshot.tasks.length} 项任务及其全部历史？`,detail:'将替换当前任务。恢复前会自动保存一份当前数据的安全副本。系统自启动等本机设置保持不变。'});
         if(confirm.response!==1)return false;store.restore(snapshot);broadcast();return true;
       }
       default:throw new Error('未知操作');
@@ -165,7 +186,7 @@ async function start(){
     const resultPath=path.resolve(smokeResult||'artifacts/ui-v1/result.json');fs.mkdirSync(path.dirname(resultPath),{recursive:true});
     try{
       await Promise.all([mainWindow,widgetWindow].map(w=>w.webContents.isLoading()?new Promise(resolve=>w.webContents.once('did-finish-load',resolve)):null));
-      const result=await require('./ui-v1-smoke.cjs')({store,mainWindow,widgetWindow,getQuickAdd:()=>quickAddWindow,broadcast,outputDirectory:path.dirname(resultPath)});
+      const result=await require(systemReview?'./ui-system-smoke.cjs':'./ui-v1-smoke.cjs')({store,mainWindow,widgetWindow,getQuickAdd:()=>quickAddWindow,getSettings:()=>settingsWindow,broadcast,outputDirectory:path.dirname(resultPath)});
       fs.writeFileSync(resultPath,JSON.stringify({version:app.getVersion(),ok:true,...result},null,2));app.quit();
     }catch(error){fs.writeFileSync(resultPath,JSON.stringify({version:app.getVersion(),ok:false,error:error.stack},null,2));app.exit(1);}
     return;
@@ -278,9 +299,10 @@ async function start(){
     const ganttImage=await mainWindow.webContents.capturePage(),ganttReport=rendererReports.get('main');
     const ganttReady=ganttReport?.view==='gantt'&&ganttReport?.ganttTasks===saved.tasks.length&&ganttReport?.ganttBars>=2;
     if(!ganttReady)errors.push('甘特图任务或时间条未正确显示');
-    mainWindow.webContents.send('toz:ui-command',{action:'settings'});
+    await openSettingsWindow();
     await new Promise(resolve=>setTimeout(resolve,400));
-    const settingsImage=await mainWindow.webContents.capturePage();
+    const settingsImage=await settingsWindow.webContents.capturePage();
+    settingsWindow.close();
     const themed=store.snapshot();themed.dark=true;store.commit(themed,themed.version);broadcast();await new Promise(resolve=>setTimeout(resolve,400));
     const darkImage=await mainWindow.webContents.capturePage(),darkWidgetImage=await widgetWindow.webContents.capturePage();
     const themeSynced=['main','widget'].every(surface=>rendererReports.get(surface)?.dark===true&&rendererReports.get(surface)?.projects.includes('测试自定义分区'));

@@ -42,3 +42,37 @@ dialog,[data-theme=dark] dialog{background:var(--paper);color:var(--ink);border-
 @media(forced-colors:active){.check-button.done{background:Highlight;border-color:Highlight;color:HighlightText}.task-row.selected,.settings-tabs button[aria-selected=true]{outline:1px solid Highlight}.task-pin-indicator{color:CanvasText}.progress-summary:before{background:CanvasText}.widget{background:Canvas!important}}
 
 .context-item-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.calendar-span.is-done .calendar-check{color:var(--checked-ink)}
+
+/* The command bar and the settings window share the demo's quiet system chrome. */
+.application-menubar{display:flex;align-items:center;gap:2px;flex:1;-webkit-app-region:no-drag;user-select:none}
+.desktop-main .application-menubar{-webkit-app-region:drag}
+.application-menubar button{-webkit-app-region:no-drag;font-size:13px;line-height:1;padding:8px 12px;border-radius:5px;color:var(--ink);white-space:nowrap}
+.application-menubar button:first-child{font-weight:650}
+.application-menubar button:hover,.application-menubar button[aria-expanded=true]{background:var(--accent-soft)}
+.application-menubar button:focus-visible{outline:2px solid var(--muted);outline-offset:-2px}
+.browser-menubar{flex:none;background:var(--surface);border:1px solid var(--line);border-bottom:0;border-radius:12px 12px 0 0;padding:5px 10px}
+.browser-menubar+.app-window{border-top-left-radius:0;border-top-right-radius:0}
+.settings-window-label,.settings-window-hint{display:none!important}
+.native-only{display:none}.desktop .native-only{display:inline-flex}
+.settings-status-text{font-size:12px;color:var(--muted);white-space:nowrap}.settings-status-icon{color:var(--muted);width:24px;height:24px}
+.settings-path-copy{min-width:0}.settings-path-copy small{overflow-wrap:anywhere}
+.settings-section-label{font-size:12px;font-weight:600;margin:24px 0 12px;color:var(--ink)}
+.desktop-settings .desktop-titlebar{height:38px;display:flex;align-items:center;padding:0 148px 0 18px;gap:12px;background:var(--titlebar-bg);border-bottom:1px solid var(--line);-webkit-app-region:drag;user-select:none}
+.desktop-settings .desktop-titlebar .application-menubar,.desktop-settings .desktop-titlebar>button,.desktop-settings .showcase{display:none}
+.desktop-settings .settings-window-label{display:flex!important;flex:1;align-items:center;gap:10px;font-size:13px;font-weight:400}
+.settings-window-label img{width:22px;height:22px}
+.desktop-settings .settings-window-hint{display:block!important;flex:none;color:var(--muted);font-size:11px;font-weight:400}
+.desktop-settings #settings-dialog{position:fixed;inset:38px 0 0;margin:0;width:100%;max-width:none;height:calc(100dvh - 38px);max-height:none;border:0;border-radius:0;box-shadow:none;padding:0;background:var(--paper);overflow:hidden}
+.desktop-settings #settings-dialog>.dialog-header{display:none}
+.desktop-settings .settings-layout{height:100%;min-height:0;grid-template-columns:172px minmax(0,1fr)}
+.desktop-settings .settings-tabs{padding:24px 10px 18px;background:var(--sidebar-surface);gap:6px;align-content:start;border-right:1px solid var(--line);border-bottom:0}
+.desktop-settings .settings-tabs button{font-size:14px;padding:12px 10px;gap:10px;min-height:44px;border-radius:8px}
+.desktop-settings #settings-dialog .dialog-body{padding:30px 32px;min-height:0;overflow:auto;scrollbar-gutter:stable}
+.desktop-settings .settings-panel h3{font-size:26px;letter-spacing:-.7px;margin:0 0 9px;font-weight:650}
+.desktop-settings .settings-intro{font-size:13px;margin-bottom:28px}
+.desktop-settings .setting-row{min-height:82px;padding:17px 18px;gap:18px}
+.desktop-settings .setting-row b{font-size:14px;font-weight:550}.desktop-settings .setting-row small{font-size:12px;margin-top:6px;line-height:1.6}
+.desktop-settings .setting-card{border-radius:12px;background:var(--titlebar-bg);overflow:hidden}
+.desktop-settings .button.secondary{font-size:13px;padding:8px 12px;flex-shrink:0}
+.desktop-settings .settings-footnote{font-size:12px;line-height:1.8;margin-top:22px}
+@media(max-width:740px){.desktop-settings .settings-layout{grid-template-columns:156px minmax(0,1fr)}.desktop-settings #settings-dialog .dialog-body{padding:24px 20px}.desktop-settings .settings-window-hint{display:none!important}.desktop-settings .setting-row{padding:14px;gap:10px}}

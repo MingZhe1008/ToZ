@@ -3,7 +3,7 @@ const path=require('node:path');
 const {createTask,startTask}=require('../prototype/domain.mjs');
 const {addSubtask}=require('../prototype/lifecycle.mjs');
 const pause=()=>new Promise(resolve=>setTimeout(resolve,100));
-module.exports=async function review({store,mainWindow,widgetWindow,getQuickAdd,broadcast,outputDirectory}){
+module.exports=async function review({store,mainWindow,widgetWindow,getQuickAdd,getSettings,broadcast,outputDirectory}){
   const checks=[],errors=[],layouts=[];
   const check=(pass,label)=>{if(!pass)throw new Error(label);checks.push(label);};
   const js=(w,code)=>w.webContents.executeJavaScript(code);
@@ -26,26 +26,26 @@ module.exports=async function review({store,mainWindow,widgetWindow,getQuickAdd,
     const next=store.snapshot();next.dark=dark;store.commit(next,next.version);broadcast();await pause();
     for(const [width,height] of [[1200,820],[960,600]]){
       await resize(mainWindow,width,height);
-      await js(mainWindow,`document.querySelector('[data-action="settings"]').click()`);await pause();
-      const layout=await js(mainWindow,`(()=>{const d=document.querySelector('#settings-dialog'),body=d.querySelector('.dialog-body'),button=d.querySelector('[data-close]');body.scrollTop=body.scrollHeight;const r=button.getBoundingClientRect(),rect=d.getBoundingClientRect();return {width:innerWidth,height:innerHeight,dialogWidth:rect.width,dialogHeight:rect.height,closeVisible:r.top>=0&&r.bottom<=innerHeight&&button.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)),noOverflow:document.documentElement.scrollWidth<=innerWidth,bodyScrolls:body.scrollHeight>body.clientHeight,theme:document.documentElement.dataset.theme};})()`);
+      await js(mainWindow,`document.querySelector('[data-action="settings"]').click()`);await wait(()=>getSettings()&&!getSettings().webContents.isLoading());await pause();
+      const layout=await js(getSettings(),`(()=>{const d=document.querySelector('#settings-dialog'),body=d.querySelector('.dialog-body'),button=document.querySelector('.desktop-titlebar');body.scrollTop=body.scrollHeight;const r=button.getBoundingClientRect(),rect=d.getBoundingClientRect();return {width:innerWidth,height:innerHeight,dialogWidth:rect.width,dialogHeight:rect.height,closeVisible:r.top===0&&r.bottom<=innerHeight,noOverflow:document.documentElement.scrollWidth<=innerWidth,bodyScrolls:body.scrollHeight>body.clientHeight,theme:document.documentElement.dataset.theme};})()`);
       layouts.push(layout);check(layout.closeVisible&&layout.noOverflow,`${dark?'深':'浅'}色 ${width}×${height} 设置滚动后关闭可见`);
-      await js(mainWindow,`document.querySelector('[data-settings-tab="startup"]').click()`);
-      check(await js(mainWindow,`!document.querySelector('#settings-startup').hidden&&document.querySelector('#settings-appearance').hidden&&!!document.querySelector('[data-preference="closeToTray"]')`),'分组设置保留原生启动与托盘选项');
-      await js(mainWindow,`document.querySelector('[data-settings-tab="appearance"]').click();document.querySelector('#settings-dialog [data-close]').click()`);
+      await js(getSettings(),`document.querySelector('[data-settings-tab="startup"]').click()`);
+      check(await js(getSettings(),`!document.querySelector('#settings-startup').hidden&&document.querySelector('#settings-appearance').hidden&&!!document.querySelector('[data-preference="closeToTray"]')`),'分组设置保留原生启动与托盘选项');
+      await js(getSettings(),`document.querySelector('[data-settings-tab="appearance"]').click();document.querySelector('#settings-dialog [data-close]').click()`);await wait(()=>!getSettings());
     }
     await resize(mainWindow,1200,820);await shot(mainWindow,`client-${dark?'dark':'light'}.png`);await shot(widgetWindow,`widget-${dark?'dark':'light'}.png`);
   }
-  await js(mainWindow,`document.querySelector('[data-action="settings"]').click()`);await pause();
-  await js(mainWindow,`document.querySelector('[data-reading="largeText"]').click()`);await wait(()=>store.settings().largeText);
+  await js(mainWindow,`document.querySelector('[data-action="settings"]').click()`);await wait(()=>getSettings()&&!getSettings().webContents.isLoading());await pause();
+  await js(getSettings(),`document.querySelector('[data-reading="largeText"]').click()`);await wait(()=>store.settings().largeText);
   await wait(async()=>await js(widgetWindow,`document.documentElement.classList.contains('large-text')`));
   check(await js(widgetWindow,`getComputedStyle(document.querySelector('#widget .task-title')).fontSize==='15px'`),'较大文字跨窗口同步至浮窗');
-  await js(mainWindow,`document.querySelector('[data-reading="reduceTransparency"]').click()`);await wait(()=>store.settings().reduceTransparency);
+  await js(getSettings(),`document.querySelector('[data-reading="reduceTransparency"]').click()`);await wait(()=>store.settings().reduceTransparency);
   await wait(async()=>await js(widgetWindow,`document.documentElement.classList.contains('reduce-transparency')`));
   check(await js(widgetWindow,`getComputedStyle(document.querySelector('.widget')).backgroundColor==='rgb(41, 41, 44)'`),'减少透明度跨窗口使用不透明深色底');
-  await js(mainWindow,`document.querySelector('#opacity-range').value=63;document.querySelector('#opacity-range').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#opacity-range').dispatchEvent(new Event('change',{bubbles:true}))`);await pause();
+  await js(getSettings(),`document.querySelector('#opacity-range').value=63;document.querySelector('#opacity-range').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#opacity-range').dispatchEvent(new Event('change',{bubbles:true}))`);await pause();
   check(store.snapshot().opacity===63,'透明度保存并保留减少透明度偏好');
-  await shot(mainWindow,'settings-reading-dark.png');
-  await js(mainWindow,`document.querySelector('#settings-dialog [data-close]').click()`);
+  await shot(getSettings(),'settings-reading-dark.png');
+  getSettings().close();await wait(()=>!getSettings());
   mainWindow.hide();let shows=0;const shown=()=>shows++;mainWindow.on('show',shown);
   await js(widgetWindow,`document.querySelector('.widget-add').click()`);
   await wait(()=>getQuickAdd()&&!getQuickAdd().webContents.isLoading());const quick=getQuickAdd();await wait(async()=>await js(quick,`!!document.querySelector('#new-dialog[open]')`));
