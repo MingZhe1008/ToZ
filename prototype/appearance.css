@@ -155,3 +155,5 @@ html.desktop[data-theme=dark],html.desktop[data-theme=dark] body{background:#1c1
 [data-theme=dark] .timeline-item.tone-success{--event-color:#62d880}[data-theme=dark] .timeline-item.tone-warning{--event-color:#ffb340}[data-theme=dark] .timeline-item.tone-teal{--event-color:#62d3c8}[data-theme=dark] .timeline-item.tone-purple{--event-color:#cf9bea}
 .timeline-item[class*="tone-"] .timeline-point{background:var(--event-color);box-shadow:0 0 0 1px color-mix(in srgb,var(--event-color) 45%,transparent)}
 .timeline-label>span,.timeline-item:is(.tone-success,.tone-warning) .timeline-reason{color:var(--event-color)}
+
+.repeat-date-hint{grid-column:1/-1;font-size:10px;line-height:1.8;color:var(--muted);margin:0;overflow-wrap:anywhere}.repeat-end-hint{display:block;font-size:10px;line-height:1.8;color:var(--muted);margin-top:7px}

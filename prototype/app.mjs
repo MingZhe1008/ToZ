@@ -83,7 +83,7 @@ try {
   saveError = '本地数据无法读取，当前只展示临时样例；请先导出检查，原存储尚未覆盖。';
 }
 const gantt=mountGantt({root:$('#gantt-view'),getTasks:()=>tasks,onRange:through=>ensureRecurrences(through),getProjects:()=>shownProjects(),getSelected:()=>selected,icon:svg,escape:esc,
-  getOrder:()=>prefs.taskOrder,onPin(task){mutate(()=>toggleTaskPin(task),task.top?'已取消置顶':'任务已置顶');},
+  getOrder:()=>prefs.taskOrder,getSeries:()=>recurrences,onPin(task){mutate(()=>toggleTaskPin(task),task.top?'已取消置顶':'任务已置顶');},
   onSelect(task){selected=task.id;historyOnly=false;calendarDetailOpen=true;render();$('#task-detail [data-action="calendar-close-detail"]')?.focus({preventScroll:true});reportRenderer();},
   onNew(date,project){openNew(date);if(project)$('#new-form').elements.project.value=project;},
   onReschedule(task){openReschedule(task.id);},
@@ -133,11 +133,14 @@ function updateRepeatForm(){
   const isLunar=preset.startsWith('lunar-');$('#repeat-lunar').hidden=!isLunar;$('#lunar-month-label').hidden=preset==='lunar-monthly';form.elements.lunarLeap.querySelector('[value="leap"]').disabled=preset==='lunar-monthly';if(preset==='lunar-monthly'&&form.elements.lunarLeap.value==='leap')form.elements.lunarLeap.value='regular';
   $('#repeat-custom').hidden=!custom;form.elements.repeatInterval.disabled=!custom;form.elements.repeatUnit.disabled=!custom;$('#repeat-options').hidden=!enabled;
   $('#repeat-weekdays').hidden=!(preset==='weekly'||preset==='biweekly'||custom&&form.elements.repeatUnit.value==='week');
+  const dateHint=$('#repeat-date-hint');dateHint.hidden=!enabled;
+  const start=form.elements.startDate.value,end=form.elements.date.value;
+  dateHint.textContent=enabled&&start&&end&&end>=start?`计划开始日用于起算周期；两日期相差 ${dayDiff(start,end)} 天，每期从执行日开始，${start===end?'计划当天完成':dayDiff(start,end)+' 天后计划完成'}。这不是整个周期的结束日期。`:'';
   const hint=$('#repeat-preview');if(!enabled){hint.textContent='每一期独立完成、独立记录，调整本期不会改变后续周期。';return;}
   try{
     const series=createSeries({title:'预览',note:'',project:'个人',planStart:form.elements.startDate.value,plan:form.elements.date.value},readRepeatRule(),form.elements.repeatUntil.value||null);
-    const dates=materializeSeries([series],[],addDays(series.start,35)).slice(0,3).map(t=>dateText(t.repeatDate));
-    hint.textContent=`${recurrenceLabel(series)}${series.until?'，至 '+dateText(series.until):'，持续重复'}。接下来：${dates.join('、')||'结束前没有匹配日期'}${series.rule.calendar==='lunar'?'。大月三十遇小月取廿九；每一期按农历换算公历。':(['month','year'].includes(series.rule.unit)?'。月末和闰日自动取当月最后一天。':'。')}`;
+    const dates=materializeSeries([series],[],addDays(series.start,35)).slice(0,3).map(t=>dateText(t.repeatDate)+' → '+dateText(t.plan));
+    hint.textContent=`${recurrenceLabel(series)}${series.until?'，至 '+dateText(series.until):'，持续重复'}。接下来（执行日 → 计划完成日）：${dates.join('、')||'结束前没有匹配日期'}${series.rule.calendar==='lunar'?'。大月三十遇小月取廿九；每一期按农历换算公历。':(['month','year'].includes(series.rule.unit)?'。月末和闰日自动取当月最后一天。':'。')}`;
   }catch(error){hint.textContent=error.message;}
 }
 function toast(message) {

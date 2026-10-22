@@ -55,6 +55,11 @@
 .gantt-bar-title{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;position:relative}
 .gantt-bar small{font-size:9px;white-space:nowrap;position:relative;flex-shrink:0}
 .gantt-bar.clipped-start{border-top-left-radius:0;border-bottom-left-radius:0}.gantt-bar.clipped-end{border-top-right-radius:0;border-bottom-right-radius:0}
+.gantt-repeat-icon{color:var(--muted);display:flex;flex-shrink:0}.gantt-repeat-icon svg{width:15px;height:15px}
+.gantt-point{position:absolute;top:13px;transform:translateX(-50%);width:28px;height:28px;display:grid;place-items:center;border-radius:7px;z-index:1}
+.gantt-point>span{display:grid;place-items:center;width:13px;height:13px;border:2px solid var(--gantt-color);background:color-mix(in srgb,var(--gantt-color) 22%,var(--gantt-bg));border-radius:50%;box-shadow:0 0 0 3px var(--gantt-bg)}
+.gantt-point:hover{background:var(--accent-soft)}.gantt-point.is-selected,.gantt-point:focus-visible{outline:2px solid var(--accent);outline-offset:0}
+.gantt-point.is-done>span{width:16px;height:16px;background:var(--completed-mark);border-color:var(--completed-mark);color:#fff}.gantt-point svg{width:11px;height:11px}
 .gantt-unscheduled,.gantt-offscreen{font-size:10px;color:var(--muted);display:flex;gap:5px;align-items:center;margin:8px 12px;padding:6px 8px;border:1px dashed var(--line);border-radius:5px;background:var(--gantt-bg);z-index:1;position:relative}
 .gantt-unscheduled svg{width:12px;height:12px}.gantt-unscheduled:hover,.gantt-offscreen:hover{color:var(--accent);border-color:var(--accent)}
 .gantt-empty{position:sticky;left:0;width:min(600px,80vw);display:flex;align-items:center;flex-direction:column;gap:12px;padding:65px 20px;color:var(--muted);font-size:12px}
