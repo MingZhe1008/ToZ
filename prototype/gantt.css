@@ -50,7 +50,7 @@
 .gantt-bar{position:absolute;top:11px;height:32px;min-width:1px;display:flex;align-items:center;gap:8px;border:1px solid color-mix(in srgb,var(--gantt-color) 85%,#000);border-radius:6px;color:#fff;background:color-mix(in srgb,var(--gantt-color) 72%,#404044);padding:0 8px;overflow:hidden;text-align:left;z-index:1;transition:filter .12s,box-shadow .12s}
 .gantt-bar:hover{filter:brightness(1.12);box-shadow:0 3px 10px #0002}
 .gantt-bar.is-selected{outline:2px solid var(--accent);outline-offset:2px}
-.gantt-bar.is-done{opacity:1;background:var(--accent-soft);border-color:var(--line);color:var(--completed-text)}.gantt-bar.is-done .gantt-bar-title{text-decoration:line-through}
+.gantt-bar.is-done{opacity:1;background:var(--completed-bg);border-color:var(--completed-mark);color:var(--completed-green)}.gantt-bar.is-done .gantt-bar-fill{background:transparent}.gantt-bar.is-done .gantt-bar-title{text-decoration:line-through}
 .gantt-bar-fill{position:absolute;left:0;top:0;bottom:0;background:#ffffff22;pointer-events:none}
 .gantt-bar-title{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;position:relative}
 .gantt-bar small{font-size:9px;white-space:nowrap;position:relative;flex-shrink:0}
