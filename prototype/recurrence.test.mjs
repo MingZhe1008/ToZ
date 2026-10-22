@@ -4,6 +4,41 @@ import {createTask,startTask,reschedule,toggleDone,todayTasks,upcomingTasks,task
 import {createSeries,occurrenceDates,materializeSeries,stopSeries,validateSeries} from './recurrence.mjs';
 import {eventTone} from './task-events.mjs';
 const series=(start,rule,until=null)=>createSeries(createTask('周期验证',start,'ToZ','独立记录',start),rule,until);
+
+test('即将到来每组只保留最近计划开始的一期，不受输入、置顶或长完成区间影响',()=>{
+  const s=createSeries(createTask('月底','2027-07-31','ToZ','','2026-10-31'),{unit:'month',interval:1,monthEnd:true});
+  const tasks=materializeSeries([s],[],'2027-02-28','2026-10-22').reverse();
+  tasks[0].top=true;tasks.at(-1).top=false;const before=structuredClone(tasks);
+  assert.deepEqual(upcomingTasks(tasks,'2026-10-22').map(t=>t.repeatDate),['2026-10-31']);
+  assert.deepEqual(tasks,before);
+});
+
+test('同名不同周期和普通任务分别保留，计划开始缺省时按完成日期选最近一期',()=>{
+  const a=series('2026-10-23',{unit:'day',interval:1}),b=series('2026-10-23',{unit:'week',interval:1,weekdays:[4]});
+  const tasks=[...materializeSeries([a,b],[],'2026-11-01'),createTask('周期验证','2026-10-24'),createTask('周期验证','2026-10-25')];
+  const upcoming=upcomingTasks(tasks,'2026-10-22');assert.equal(upcoming.length,4);
+  assert.equal(upcoming.filter(t=>t.repeatId===a.id).length,1);assert.equal(upcoming.filter(t=>t.repeatId===b.id).length,1);
+  const legacy=tasks.filter(t=>t.repeatId===a.id).map(t=>({...t,planStart:null})).reverse();
+  assert.equal(upcomingTasks(legacy,'2026-10-22')[0].plan,'2026-10-23');
+});
+
+test('最近一期完成、删除、取消或进入今日后，未来提醒自动推进且今日仍保留遗留',()=>{
+  const s=series('2026-10-23',{unit:'day',interval:1}),original=materializeSeries([s],[],'2026-10-27');
+  for(const patch of [{done:true,completedDate:'2026-10-22'},{deletedAt:'2026-10-22'},{cancelled:true},{started:'2026-10-22'}]){
+    const tasks=structuredClone(original);Object.assign(tasks[0],patch);
+    assert.equal(upcomingTasks(tasks,'2026-10-22')[0].repeatDate,'2026-10-24');
+  }
+  assert.equal(upcomingTasks(original,'2026-10-24')[0].repeatDate,'2026-10-25');
+  assert.equal(todayTasks(original,'2026-10-24').length,2);
+});
+
+test('手动调整本期开始后按当前计划取最近一期，筛选结束不删除其余期次',()=>{
+  const s=series('2026-10-23',{unit:'day',interval:1}),tasks=materializeSeries([s],[],'2026-10-27');
+  reschedule(tasks[0],'2026-10-28','本期改期','2026-10-28');
+  assert.equal(upcomingTasks(tasks,'2026-10-22')[0].repeatDate,'2026-10-24');
+  assert.equal(tasks.length,5);assert(tasks.every(t=>!t.cancelled&&!t.deletedAt));
+  assert.deepEqual(upcomingTasks(tasks,'2026-10-29'),[]);
+});
 test('每天和自定义间隔，结束日期包含当天且不会越界生成',()=>{
   const s=series('2026-10-20',{unit:'day',interval:3},'2026-10-29');
   assert.deepEqual(occurrenceDates(s,'2026-10-20','2026-11-30'),['2026-10-20','2026-10-23','2026-10-26','2026-10-29']);
