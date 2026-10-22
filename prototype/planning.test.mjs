@@ -3,10 +3,46 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {lunarDate,Lunar,LunarMonth} from './lunar.mjs';
 import {createSeries,occurrenceDates,materializeSeries,validateSeries} from './recurrence.mjs';
-import {createTask} from './domain.mjs';
-import {calendarWeeks} from './calendar.mjs';
+import {createTask,startTask,reschedule,toggleDone,taskDateRange} from './domain.mjs';
+import {calendarWeeks,tasksByDate,calendarTaskRange} from './calendar.mjs';
 import {preferences,sortedTasks,moveBefore,renameProject} from './preferences.mjs';
 const make=(start,unit,month,day,leap='regular',until=null)=>createSeries(createTask('农历安排',start,'ToZ','',start),{unit,interval:1,calendar:'lunar',lunar:{month,day,leap}},until);
+
+test('新建普通任务与周期期次默认置顶，取消置顶后生成不会覆盖已有选择',()=>{
+  const task=createTask('新任务','2026-10-20');assert.equal(task.top,true);
+  const series=createSeries({...task,planStart:'2026-10-20'},{unit:'day',interval:1});
+  const tasks=materializeSeries([series],[],'2026-10-22');assert(tasks.every(t=>t.top));
+  tasks[0].top=false;
+  const added=materializeSeries([series],tasks,'2026-10-24');
+  assert(added.every(t=>t.top));assert.equal(tasks[0].top,false);
+  assert(!added.some(t=>t.id===tasks[0].id));
+});
+
+test('周期在月历只标记执行日期，开始、延期、完成重开不产生延续条且历史不变',()=>{
+  const series=createSeries(createTask('每月十日','2026-10-13','ToZ','','2026-10-10'),{unit:'month',interval:1});
+  const tasks=materializeSeries([series],[],'2026-12-31'),task=tasks[0];
+  startTask(task);reschedule(task,'2026-11-25');toggleDone(task);toggleDone(task);
+  const before=structuredClone(tasks);
+  assert.deepEqual(calendarTaskRange(task),{start:'2026-10-10',end:'2026-10-10'});
+  assert.equal(taskDateRange(task).end,'2026-11-25');
+  const dates=tasksByDate(tasks,'',{from:'2026-10-01',to:'2026-12-31'});
+  assert.deepEqual([...dates.keys()],['2026-10-10','2026-11-10','2026-12-10']);
+  const segments=calendarWeeks(tasks,'2026-11').flatMap(w=>w.segments);
+  assert.equal(segments.length,1);assert.equal(segments[0].first,segments[0].last);
+  assert(!segments[0].continuesBefore&&!segments[0].continuesAfter);
+  assert.deepEqual(tasks,before);task.deletedAt='2026-10-20';assert.equal(calendarTaskRange(task),null);
+  delete task.deletedAt;task.cancelled=true;assert.equal(calendarTaskRange(task),null);
+});
+
+test('每周多选和农历周期按各期日期点性展示，旧周期缺少期次日期时回退计划日',()=>{
+  const weekly=createSeries(createTask('每周一三','2026-10-16','ToZ','','2026-10-12'),{unit:'week',interval:1,weekdays:[0,2]});
+  const tasks=materializeSeries([weekly],[],'2026-10-31');
+  const lunar=make('2026-02-17','month',1,10);tasks.push(...materializeSeries([lunar],[],'2026-10-31'));
+  const segments=calendarWeeks(tasks,'2026-10').flatMap(w=>w.segments);
+  assert(segments.length>5);assert(segments.every(s=>s.first===s.last));
+  const old={...tasks[0]};delete old.repeatDate;
+  assert.deepEqual(calendarTaskRange(old),{start:old.planStart,end:old.planStart});
+});
 test('农历转换与春节锚点，每年按农历换算而不是固定公历',()=>{
   assert.equal(lunarDate('2026-02-17').text,'正月初一');
   const s=make('2026-01-01','year',1,1);

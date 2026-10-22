@@ -160,7 +160,7 @@ class Store {
   ensureRecurring(today=new Date().toLocaleDateString('sv-SE')){
     const snapshot=this.snapshot(),added=materializeSeries(snapshot.recurrences,snapshot.tasks,addDays(today,45),today);
     if(!added.length)return false;
-    snapshot.tasks.unshift(...added);this.commit(snapshot,snapshot.version);return true;
+    snapshot.tasks.unshift(...added);snapshot.preferences.taskOrder=[...added.map(t=>t.id),...snapshot.preferences.taskOrder];this.commit(snapshot,snapshot.version);return true;
   }
   writeTasks(tasks) {
     const upsert=this.db.prepare('INSERT INTO tasks(id,started,initial_plan,data) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET started=excluded.started,initial_plan=excluded.initial_plan,data=excluded.data');

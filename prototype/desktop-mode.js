@@ -1,1 +1,1 @@
-if(window.toz){document.documentElement.classList.add('desktop',window.toz.surface==='widget'?'desktop-widget':'desktop-main');const initial=window.toz.read();document.documentElement.dataset.theme=initial.ok&&initial.snapshot.dark===false?'light':'dark';}
+if(window.toz){document.documentElement.classList.add('desktop',`desktop-${window.toz.surface}`);const initial=window.toz.read();document.documentElement.dataset.theme=initial.ok&&initial.snapshot.dark===false?'light':'dark';}

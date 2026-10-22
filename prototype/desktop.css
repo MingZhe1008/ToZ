@@ -43,4 +43,12 @@ dialog label.native-switch{margin:0}
 .native-actions{display:flex;flex-wrap:wrap;gap:7px;margin:16px 0}
 .native-info{font-size:10px;line-height:1.8;color:#86868b;background:#f0f0f4;padding:12px;border-radius:8px}
 .desktop dialog{max-height:calc(100vh - 30px)}
+.desktop-quick-add .showcase,.desktop-quick-add .desktop-titlebar{display:none}
+.desktop-quick-add #new-dialog{width:100%;max-width:none;max-height:100vh;height:100vh;margin:0;border:0;border-radius:0;box-shadow:none;padding:0;overflow:hidden}
+.desktop-quick-add #new-form{height:100%;display:flex;flex-direction:column}
+.desktop-quick-add .quick-add-heading{flex-shrink:0;padding:18px 24px 0}
+.desktop-quick-add .quick-add-heading h2{margin-bottom:14px}
+.desktop-quick-add .quick-add-body{flex:1;min-height:0;overflow:auto;padding:0 24px}
+.desktop-quick-add #new-form>.dialog-actions{flex-shrink:0;margin:0;padding:14px 24px;border-top:1px solid var(--line);background:var(--paper)}
+.desktop-quick-add .task-date-range{grid-template-columns:1fr 1fr}
 @media(max-width:1080px){.desktop-main .app-window{grid-template-columns:160px minmax(260px,1fr) 300px}.desktop-main .task-column{padding-left:20px;padding-right:20px}}

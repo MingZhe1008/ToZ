@@ -51,7 +51,7 @@ export function toggleDone(task) {
 export function createTask(title, plan, project = '个人', note = '', planStart = null) {
   if (!title.trim()) throw new Error('请先填写任务标题');
   validatePlanRange(planStart,plan);
-  return { id: uid(), title: title.trim(), project, note: note.trim(), createdAt:new Date().toISOString(),planStart:planStart||null,plan: plan || null, initialPlan: plan || null, started: null, done: false, completedDate: null, subtasks: [], events: [{ id: uid(), type: 'create', date: TODAY, at: new Date().toISOString() }] };
+  return { id: uid(), title: title.trim(), project, note: note.trim(), createdAt:new Date().toISOString(),planStart:planStart||null,plan: plan || null, initialPlan: plan || null, started: null, done: false, top: true, completedDate: null, subtasks: [], events: [{ id: uid(), type: 'create', date: TODAY, at: new Date().toISOString() }] };
 }
 export function todayTasks(tasks, date = TODAY) {
   return tasks.filter(t => !t.cancelled && !t.deletedAt && (t.done ? t.completedDate === date : !!((t.started && t.started <= date) || (t.planStart && t.planStart <= date) || (t.plan && t.plan <= date))));

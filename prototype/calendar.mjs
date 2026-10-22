@@ -1,6 +1,16 @@
 import {sortedTasks} from './preferences.mjs';
 import { validDate, TODAY, addDays, taskDateRange } from './domain.mjs';
 
+// Recurrences mark their scheduled occurrence only; work history remains intact.
+export function calendarTaskRange(task, today = TODAY) {
+  if(task.cancelled||task.deletedAt)return null;
+  if(task.repeatId){
+    const date=[task.repeatDate,task.planStart,task.plan].find(validDate);
+    return date?{start:date,end:date}:null;
+  }
+  return taskDateRange(task,today);
+}
+
 export function shiftMonth(month, offset) {
   const [year, number] = month.split('-').map(Number);
   const date = new Date(Date.UTC(year, number - 1 + offset, 1));
@@ -26,7 +36,7 @@ export function tasksByDate(tasks, term = '', {from,to,today=TODAY} = {}) {
   if(!validDate(from)||!validDate(to)||from>to)throw new Error('日历查询区间无效');
   const result = new Map(), query = term.trim().toLocaleLowerCase();
   for (const task of tasks) {
-    const range=taskDateRange(task,today);if(!range)continue;
+    const range=calendarTaskRange(task,today);if(!range)continue;
     if (query && !`${task.title} ${task.note || ''} ${task.project}`.toLocaleLowerCase().includes(query)) continue;
     const first=range.start>from?range.start:from,last=range.end<to?range.end:to;
     for(let date=first;date<=last;date=addDays(date,1)){
@@ -51,7 +61,7 @@ export function calendarWeeks(tasks,month,term='',order=[]){
   for(let i=0;i<days.length;i+=7){
     const week=days.slice(i,i+7),lanes=[],segments=[];
     for(const task of sorted){
-      const range=taskDateRange(task);if(!range||range.end<week[0].date||range.start>week[6].date)continue;
+      const range=calendarTaskRange(task);if(!range||range.end<week[0].date||range.start>week[6].date)continue;
       const first=range.start<week[0].date?0:week.findIndex(d=>d.date===range.start),last=range.end>week[6].date?6:week.findIndex(d=>d.date===range.end);
       let lane=lanes.findIndex(cells=>cells.slice(first,last+1).every(value=>!value));
       if(lane<0){lane=lanes.length;lanes.push(Array(7).fill(false));}
