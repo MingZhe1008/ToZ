@@ -28,6 +28,7 @@ module.exports=async function upcomingSmoke({store,mainWindow,broadcast,outputDi
     await js(`document.querySelector('#task-list .task-row[data-task=${JSON.stringify(first.id)}] [data-action="complete"]').click()`);await pause();rendered=await read();
     check(!rendered.ids.includes(first.id)&&rendered.ids.includes(second.id)&&rendered.count===expectedCount,'完成最近一期后实际列表与计数自动展示下一期');
     await navigate('all');rendered=await read();
+    await js(`document.querySelector('[data-action="toggle-repeat-instances"][data-repeat=${JSON.stringify(series.id)}]').click()`);await pause();rendered=await read();
     check(instances.every(task=>rendered.ids.includes(task.id)),'全部任务仍保留每一个周期期次');
     await js(`document.querySelector('#task-list .task-row[data-task=${JSON.stringify(first.id)}] [data-action="complete"]').click()`);await pause();
     await navigate('upcoming');rendered=await read();

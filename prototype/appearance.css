@@ -157,3 +157,5 @@ html.desktop[data-theme=dark],html.desktop[data-theme=dark] body{background:#1c1
 .timeline-label>span,.timeline-item:is(.tone-success,.tone-warning) .timeline-reason{color:var(--event-color)}
 
 .repeat-date-hint{grid-column:1/-1;font-size:10px;line-height:1.8;color:var(--muted);margin:0;overflow-wrap:anywhere}.repeat-end-hint{display:block;font-size:10px;line-height:1.8;color:var(--muted);margin-top:7px}
+
+.repeat-instances-toggle{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border:1px solid var(--line);border-radius:6px;background:var(--accent-soft);color:var(--muted);font-size:10px}.repeat-instances-toggle:hover{color:var(--ink);background:var(--selection-bg)}.repeat-instances-toggle svg{width:12px;height:12px}

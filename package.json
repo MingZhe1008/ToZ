@@ -5,7 +5,7 @@
   "author": "ToZ",
   "license": "UNLICENSED",
   "main": "desktop/main.cjs",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,7 @@
     "desktop": "electron .",
     "install:runtime": "node node_modules/electron/install.js",
     "build:win": "node scripts/build-win.cjs",
-    "test": "node --test prototype/domain.test.mjs desktop/store.test.cjs desktop/startup.test.cjs prototype/gantt.test.mjs prototype/recurrence.test.mjs prototype/planning.test.mjs prototype/lifecycle.test.mjs prototype/trash.test.mjs",
+    "test": "node --test prototype/domain.test.mjs prototype/task-list.test.mjs desktop/store.test.cjs desktop/startup.test.cjs prototype/gantt.test.mjs prototype/recurrence.test.mjs prototype/planning.test.mjs prototype/lifecycle.test.mjs prototype/trash.test.mjs",
     "smoke": "electron . --smoke-test --toz-data=.runtime/smoke --smoke-result=artifacts/desktop-smoke/result.json"
   },
   "devDependencies": {
