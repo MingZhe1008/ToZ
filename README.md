@@ -6,7 +6,7 @@ Windows 离线待办客户端、透明浮窗及安装包，保留浏览器设计
 
 ## Windows 安装版
 
-安装包：`dist/ToZ-Setup-0.4.8-x64.exe`。可选择安装目录、桌面/开始菜单快捷方式和开机自启动；客户端设置也可修改启动、托盘与浮窗行为。安装版使用本机真实日期与 SQLite，首次启动为空任务。
+安装包：`dist/ToZ-Setup-0.4.9-x64.exe`。可选择安装目录、桌面/开始菜单快捷方式和开机自启动；客户端设置也可修改启动、托盘与浮窗行为。安装版使用本机真实日期与 SQLite，首次启动为空任务。
 
 使用、数据路径、导入原型数据及版本范围见 [Windows 安装版说明](docs/Windows安装版说明.md)。
 
@@ -17,7 +17,7 @@ Windows 离线待办客户端、透明浮窗及安装包，保留浏览器设计
 ```powershell
 npm ci
 npm run desktop
-# 生成 dist/ToZ-Setup-0.4.8-x64.exe
+# 生成 dist/ToZ-Setup-0.4.9-x64.exe
 npm run build:win
 ```
 
