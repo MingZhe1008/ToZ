@@ -15,13 +15,14 @@
   <link rel="stylesheet" href="./appearance.css">
   <link rel="stylesheet" href="./gantt.css">
   <link rel="stylesheet" href="./planning.css">
+  <link rel="stylesheet" href="./workspace-theme.css">
 </head>
 <body>
-  <header class="desktop-titlebar"><span>ToZ</span><button data-action="toggle-widget" aria-label="隐藏悬浮框" title="显示 / 隐藏悬浮框（支持双击）" aria-pressed="true"><span data-icon="layers"></span>悬浮框</button></header>
+  <header class="desktop-titlebar"><span>ToZ</span><button data-action="app-menu" aria-label="应用菜单" aria-haspopup="menu"><span data-icon="more"></span>菜单</button><button data-action="toggle-widget" aria-label="隐藏悬浮框" title="显示 / 隐藏悬浮框（支持双击）" aria-pressed="true"><span data-icon="layers"></span>悬浮框</button></header>
   <header class="studio-bar">
     <a class="wordmark" href="#" aria-label="ToZ 首页"><span class="brand-mark">t<span>z</span></span><span>ToZ<small>让开始有迹可循</small></span></a>
     <nav class="view-switch" aria-label="预览方式"><button data-mode="both" aria-pressed="true">并排预览</button><button data-mode="client" aria-pressed="false">客户端</button><button data-mode="widget" aria-pressed="false">桌面浮窗</button></nav>
-    <div class="studio-meta"><span class="live-dot"></span> 交互原型 <span class="version">v0.1</span><button class="icon-button" data-action="guide" aria-label="查看原型说明" title="原型说明"><span data-icon="info"></span></button></div>
+    <div class="studio-meta"><span class="live-dot"></span> 交互原型 <span class="version">v1.0.0</span><button class="icon-button" data-action="guide" aria-label="查看原型说明" title="原型说明"><span data-icon="info"></span></button></div>
   </header>
 
   <main class="showcase" data-mode="both">
@@ -41,13 +42,13 @@
             <button class="nav-item" data-view="done"><span data-icon="checkCircle"></span>已完成</button>
           </div>
           <div class="nav-group projects" id="project-nav"></div>
-          <div class="sidebar-bottom"><div class="quiet-note"><span data-icon="leaf"></span><p>计划可以改变，<br>开始值得被记住。</p></div><div class="sidebar-footer-actions"><button class="nav-item" data-action="settings"><span data-icon="settings"></span>数据与设置</button><button class="icon-button recycle-shortcut" data-action="trash" aria-label="回收站" title="回收站"><span data-icon="trash"></span></button></div><div class="local-status" id="save-status"><span class="live-dot"></span>已保存在本机</div></div>
+          <div class="sidebar-bottom"><div class="quiet-note"><span data-icon="leaf"></span><p>计划可以改变，<br>开始值得被记住。</p></div><div class="sidebar-footer-actions"><button class="nav-item" data-action="settings"><span data-icon="settings"></span>设置</button><button class="icon-button recycle-shortcut" data-action="trash" aria-label="回收站" title="回收站"><span data-icon="trash"></span></button></div><div class="local-status" id="save-status"><span class="live-dot"></span>已保存在本机</div></div>
         </aside>
 
         <section class="task-column" aria-label="任务列表">
-          <div class="column-toolbar"><span id="breadcrumb">我的空间 <span class="crumb-slash">/</span> 今天</span><button class="button secondary toolbar-add" data-action="new" aria-label="添加待办" title="添加待办 (N)"><span data-icon="plus"></span>添加待办</button></div>
-          <div class="day-heading"><div class="date-label" id="date-label">10 月 20 日，星期二</div><h1 id="view-title">今天，慢慢做好。</h1><p id="view-subtitle">留一点专注，给真正重要的事。</p></div>
-          <div class="progress-summary"><div><span id="progress-caption"></span><span id="progress-percent"></span></div><div class="progress-track"><span id="progress-fill"></span></div></div>
+          <div class="column-toolbar"><span id="breadcrumb">我的空间 <span class="crumb-slash">/</span> 今天</span><div class="toolbar-actions"><button class="icon-button" data-action="app-menu" aria-label="应用菜单" aria-haspopup="menu"><span data-icon="more"></span></button><button class="button secondary toolbar-add" data-action="new" aria-label="添加待办" title="添加待办 (N)"><span data-icon="plus"></span>添加待办</button></div></div>
+          <div class="day-heading"><div class="date-label" id="date-label">10 月 20 日，星期二</div><div class="day-title-row"><h1 id="view-title">今天</h1><div class="progress-summary"><div><span id="progress-caption"></span><span id="progress-percent"></span></div><div class="progress-track"><span id="progress-fill"></span></div></div></div><p id="view-subtitle">从一件重要的小事开始。</p></div>
+          <p id="progress-detail" class="progress-detail" hidden></p>
           <div class="list-controls"><span id="list-label">今日清单</span><label class="inline-search"><span data-icon="search"></span><input id="task-search" type="search" placeholder="筛选任务" aria-label="筛选任务"></label></div>
           <div id="task-list" class="task-list"></div>
           <button class="add-task" data-action="new"><span data-icon="plus"></span>添加一个待办 <kbd>N</kbd></button>
@@ -80,7 +81,30 @@
 
   <dialog id="reschedule-dialog"><form id="reschedule-form"><div class="dialog-top"><span class="dialog-eyebrow">给计划一点余地</span><button type="button" class="icon-button" data-close aria-label="关闭"><span data-icon="close"></span></button></div><h2>调整计划</h2><p class="dialog-task-title" id="reschedule-title"></p><div class="immutable-note"><span data-icon="lock"></span><div>首次开始 <b id="reschedule-start"></b><small>调整计划不会改变首次开始日期</small></div></div><div class="reschedule-dates"><div class="form-grid"><label>计划开始日期<input type="date" name="startDate"></label><label>新的计划完成日期<input type="date" name="date" required></label></div><div class="reschedule-quick-dates"><span>快捷设置完成日期</span><div class="date-shortcuts" role="group" aria-label="快捷设置计划完成日期"><button type="button" data-date="2026-10-21">明天 · 10/21</button><button type="button" data-date="2026-10-23">本周五 · 10/23</button><button type="button" data-date="2026-10-27">一周后 · 10/27</button></div></div></div><label>调整原因 <span class="optional">可选</span><textarea name="reason" rows="2" placeholder="是什么让计划发生了变化？" maxlength="500"></textarea></label><p class="form-hint" id="reschedule-hint"></p><p class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button secondary" data-close>取消</button><button class="button primary" type="submit">保存并记录</button></div></form></dialog>
 
-  <dialog id="settings-dialog" class="scroll-dialog"><header class="dialog-header"><div class="dialog-top"><span class="dialog-eyebrow">属于你的空间</span><button type="button" class="icon-button" data-close aria-label="关闭"><span data-icon="close"></span></button></div><h2>数据与显示</h2></header><div class="dialog-body"><div class="setting-row appearance-row"><div><b>外观</b><small>主窗口与悬浮框使用相同模式</small></div><div class="appearance-switch" role="group" aria-label="外观模式"><button data-action="theme-light" aria-pressed="true">浅色</button><button data-action="theme-dark" aria-pressed="false">深色</button></div></div><div class="setting-row"><div><b>浮窗背景不透明度</b><small>文字始终清晰，背景轻轻透出</small></div><output id="opacity-value">76%</output></div><input id="opacity-range" type="range" min="35" max="95" value="76" aria-label="浮窗背景不透明度"><div class="setting-row"><div><b>导出本地数据</b><small>保留任务、子任务与每一次改期历史</small></div><button class="button secondary" data-action="export">导出 JSON</button></div><div class="setting-row"><div><b>回收站</b><small>恢复已删除的分区、任务和子任务</small></div><button class="button secondary" data-action="trash">打开回收站</button></div><div class="prototype-note"><span data-icon="info"></span><p>当前为交互原型，演示日期固定为 2026-10-20。数据保存在此浏览器中；系统透明、置顶与托盘将在 Windows 客户端实现。原型无需联网。</p></div><button class="text-button reset-button" data-action="reset">恢复初始演示数据…</button></div></dialog>
+  <dialog id="settings-dialog" class="scroll-dialog settings-dialog" aria-labelledby="settings-title">
+    <header class="dialog-header"><div class="dialog-top"><span class="dialog-eyebrow">属于你的空间</span><button type="button" class="icon-button" data-close aria-label="关闭设置"><span data-icon="close"></span></button></div><h2 id="settings-title">设置</h2></header>
+    <div class="settings-layout">
+      <nav class="settings-tabs" role="tablist" aria-label="设置分类" aria-orientation="vertical">
+        <button id="tab-appearance" role="tab" data-settings-tab="appearance" aria-controls="settings-appearance" aria-selected="true"><span data-icon="sun"></span>外观与阅读</button>
+        <button id="tab-startup" role="tab" data-settings-tab="startup" aria-controls="settings-startup" aria-selected="false" tabindex="-1"><span data-icon="layers"></span>启动与窗口</button>
+        <button id="tab-data" role="tab" data-settings-tab="data" aria-controls="settings-data" aria-selected="false" tabindex="-1"><span data-icon="shield"></span>数据与备份</button>
+        <button id="tab-about" role="tab" data-settings-tab="about" aria-controls="settings-about" aria-selected="false" tabindex="-1"><span data-icon="info"></span>关于</button>
+      </nav>
+      <div class="dialog-body">
+        <section id="settings-appearance" class="settings-panel" role="tabpanel" aria-labelledby="tab-appearance" tabindex="0">
+          <h3>外观与阅读</h3><p class="settings-intro">轻一点的界面，清楚一点的内容。</p>
+          <div class="setting-card"><div class="setting-row"><div><b>颜色模式</b><small>主窗口、浮窗与新增窗口保持一致</small></div><div class="appearance-switch" role="group" aria-label="外观模式"><button data-action="theme-light" aria-pressed="false">浅色</button><button data-action="theme-dark" aria-pressed="true">深色</button></div></div>
+          <div class="setting-row"><div><b>减少透明度</b><small>使用实底，提升复杂壁纸下的可读性</small></div><label class="native-switch"><input type="checkbox" data-reading="reduceTransparency" aria-label="减少透明度"><span></span></label></div>
+          <div class="setting-row"><div><b>较大文字</b><small>放大任务、导航和详情文字</small></div><label class="native-switch"><input type="checkbox" data-reading="largeText" aria-label="较大文字"><span></span></label></div>
+          <div class="setting-row"><div><b>浮窗背景不透明度</b><small>只调整底色，文字始终保持清晰</small></div><output id="opacity-value">88%</output></div><div class="opacity-setting"><input id="opacity-range" type="range" min="35" max="95" value="88" aria-label="浮窗背景不透明度"><p>复杂背景建议使用更高不透明度，或开启“减少透明度”。</p></div></div>
+          <p class="settings-section-label">文字预览</p><div class="setting-card reading-preview"><strong>今天，做好一件小事。</strong><p>完成 ToZ 桌面体验设计</p><small>10 月 22 日 · 持续 8 天 · 中文与数字自然对齐</small></div><p class="settings-footnote">使用系统界面字体，让中文与数字自然对齐。</p>
+        </section>
+        <section id="settings-startup" class="settings-panel" role="tabpanel" aria-labelledby="tab-startup" tabindex="0" hidden><h3>启动与窗口</h3><p class="settings-intro">按自己的节奏开始一天。</p><p class="browser-only-note">启动项、托盘与原生浮窗设置在 Windows 安装版中可用。浏览器仅提供外观与交互预览。</p><div id="native-settings" class="setting-card"></div><p id="startup-warning" class="form-error" role="status"></p><div id="native-window-actions" class="native-actions"></div><p class="settings-footnote">Ctrl+Alt+T 可显示浮窗并解除鼠标穿透。也可从托盘选择“解除鼠标穿透”。</p></section>
+        <section id="settings-data" class="settings-panel" role="tabpanel" aria-labelledby="tab-data" tabindex="0" hidden><h3>数据与备份</h3><p class="settings-intro">任务、子任务与每一次调整，都留在本机。</p><div class="setting-card"><div class="setting-row"><div><b>导出完整备份</b><small>保留任务、分区、周期与全部足迹</small></div><button class="button secondary" data-action="export">导出 JSON</button></div><div class="setting-row"><div><b>回收站</b><small>恢复已删除内容，或确认后彻底删除</small></div><button class="button secondary" data-action="trash">打开回收站</button></div></div><div id="native-data-actions" class="native-actions"></div><p id="native-data-path" class="native-data-path"></p><p class="native-info">安装版使用 SQLite，每日最新快照保留最近十四份。恢复前先另存安全副本，再确认替换任务。浏览器原型使用当前浏览器的 localStorage，两者不会自动互通。</p><button class="text-button reset-button" data-action="reset">恢复初始演示数据…</button></section>
+        <section id="settings-about" class="settings-panel" role="tabpanel" aria-labelledby="tab-about" tabindex="0" hidden><div class="settings-about-brand"><span class="brand-mark small">t<span>z</span></span><b>ToZ</b></div><h3>让开始有迹可循。</h3><p id="native-version" class="settings-intro">ToZ 1.0.0 · 浏览器交互原型</p><p class="settings-footnote">计划可以调整，首次开始值得被记住。离线使用，不依赖账户或业务服务器。</p><div id="native-about-actions" class="native-actions"></div></section>
+      </div>
+    </div>
+  </dialog>
 
   <dialog id="guide-dialog"><div class="dialog-top"><span class="dialog-eyebrow">设计原型 · v0.1</span><button type="button" class="icon-button" data-close aria-label="关闭"><span data-icon="close"></span></button></div><h2>让开始有迹可循。</h2><p class="guide-intro">一个安静的本地待办工作台，和一张留在桌面上的今日清单。</p><div class="guide-item"><span>01</span><div><b>开始，被好好记住</b><p>首次开始日期固定，完成前持续计算经过的日历天数。</p></div></div><div class="guide-item"><span>02</span><div><b>计划，可以慢慢调整</b><p>试试“调整计划”，每次延期的日期和原因都会留在时间线中。</p></div></div><div class="guide-item"><span>03</span><div><b>工作台与浮窗，保持一致</b><p>新建、完成或改期，两侧同步更新。浮窗可在画布中拖动、折叠与调节透明度。</p></div></div><div class="prototype-note"><span data-icon="info"></span><p>这是浏览器交互原型，尚未实现系统悬浮窗口。日期固定为 2026-10-20，数据仅保存到当前浏览器。完整需求与视觉规范位于分区 docs 目录。</p></div><div class="dialog-actions"><button class="button primary" data-close>开始体验 <span data-icon="arrow"></span></button></div></dialog>
   <dialog id="reset-dialog"><h2>恢复演示数据？</h2><p class="guide-intro">当前浏览器中的原型任务与调整记录将被替换。需要保留时，请先导出 JSON。</p><div class="dialog-actions"><button class="button secondary" data-close>取消</button><button class="button primary" data-action="confirm-reset">恢复演示数据</button></div></dialog>

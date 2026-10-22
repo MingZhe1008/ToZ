@@ -10,7 +10,7 @@ const {validatePlanRange,validateSubtaskPlan}=require('../prototype/domain.mjs')
 const {validateSeries,occurrenceDates,materializeSeries}=require('../prototype/recurrence.mjs');
 const {validDate:validRepeatDate,addDays}=require('../prototype/domain.mjs');
 
-const DEFAULT_SETTINGS = { widgetVisible: true, widgetPinned: false, closeToTray: true, startMinimized: false, widgetCollapsed: false, opacity: 82 };
+const DEFAULT_SETTINGS = { widgetVisible: true, widgetPinned: false, closeToTray: true, startMinimized: false, widgetCollapsed: false, opacity: 88, reduceTransparency: false, largeText: false };
 const dateValid = value => value === null || value === undefined || (/^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value);
 function validateSnapshot(snapshot) {
   if (!snapshot || !Array.isArray(snapshot.tasks) || snapshot.tasks.length > 50000) throw new Error('无效的任务数据');
@@ -82,8 +82,8 @@ class Store {
   }
   meta(key, fallback) { const row=this.db.prepare('SELECT value FROM meta WHERE key=?').get(key); return row ? JSON.parse(row.value) : fallback; }
   setMeta(key, value) { this.db.prepare('INSERT INTO meta VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, JSON.stringify(value)); }
-  snapshot() { const tasks=this.db.prepare('SELECT data FROM tasks ORDER BY rowid DESC').all().map(row=>JSON.parse(row.data));return { schema: 1, version: this.meta('version', 0), tasks, preferences:preferences(this.meta('preferences',{}),projectList(this.meta('projects',null),tasks),tasks), recurrences:this.meta('recurrences',[]), projects:projectList(this.meta('projects',null),tasks), opacity: this.meta('opacity',82), dark: this.meta('dark',true), settings:this.settings() }; }
-  settings() { return { ...DEFAULT_SETTINGS, ...this.meta('settings', {}), opacity: this.meta('opacity', 82) }; }
+  snapshot() { const tasks=this.db.prepare('SELECT data FROM tasks ORDER BY rowid DESC').all().map(row=>JSON.parse(row.data));return { schema: 1, version: this.meta('version', 0), tasks, preferences:preferences(this.meta('preferences',{}),projectList(this.meta('projects',null),tasks),tasks), recurrences:this.meta('recurrences',[]), projects:projectList(this.meta('projects',null),tasks), opacity: this.meta('opacity',88), dark: this.meta('dark',true), settings:this.settings() }; }
+  settings() { return { ...DEFAULT_SETTINGS, ...this.meta('settings', {}), opacity: this.meta('opacity', 88) }; }
   updateSettings(patch) {
     const current=this.settings();
     for(const [key,value] of Object.entries(patch)) {
@@ -139,7 +139,7 @@ class Store {
       this.writeTasks(input.tasks);
       this.setMeta('projects',projectList(input.projects,input.tasks));
       this.setMeta('preferences',preferences(input.preferences,input.projects,input.tasks));
-      this.setMeta('opacity',Math.max(35,Math.min(95,Number(input.opacity)||82)));
+      this.setMeta('opacity',Math.max(35,Math.min(95,Number(input.opacity)||88)));
       this.setMeta('dark',typeof input.dark==='boolean'?input.dark:current.dark);
       this.setMeta('recurrences',input.recurrences);
       this.setMeta('version',current.version+1);

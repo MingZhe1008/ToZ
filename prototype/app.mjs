@@ -12,7 +12,7 @@ import { DEFAULT_PROJECTS, projectName, projectList, projectColor, setProjectCol
 import { TODAY, uid, seedTasks, createTask, reschedule, startTask, toggleDone, duration, postponements, shiftedDays, todayTasks, dayDiff, addDays, refreshToday, upcomingTasks, taskDateRange, validDate } from './domain.mjs';
 import { monthDays, shiftMonth, tasksByDate, dayPreview, calendarWeeks, calendarTaskRange } from './calendar.mjs';
 import { mountDatePickers, syncDatePickers, closeDatePickers } from './date-picker.mjs';
-import { mountDesktopSettings, refreshDesktopSettings } from './desktop-ui.mjs';
+import { mountDesktopSettings, refreshDesktopSettings, selectSettingsTab } from './desktop-ui.mjs';
 
 const $ = selector => document.querySelector(selector);
 const icons = {
@@ -43,6 +43,8 @@ const icons = {
 const svg = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.layers}</svg>`;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dateText = date => date ? date.replaceAll('-', '.')+' · '+lunarText(date) : '尚未安排';
+const compactDay = date => date ? Number(date.slice(5,7))+'/'+Number(date.slice(8,10)) : '未安排';
+const displayDate = date => date ? date.replaceAll('-', '.') : '尚未安排';
 const shortDate = date => date ? `${Number(date.slice(5,7))}/${Number(date.slice(8,10))} · ${lunarText(date)}` : '未安排';
 const taskIdAttr = task => `data-task="${esc(task.id)}"`;
 const native = window.toz;
@@ -58,7 +60,8 @@ const widgetTasks=()=>ordered(todayTasks(tasks).filter(t=>!prefs.widgetProject||
 const reorderAttrs=task=>`data-reorder-kind="task" data-reorder-id="${esc(task.id)}" data-top="${!!task.top}" data-done="${!!task.done}"`;
 const pinButton=task=>`<button class="task-pin ${task.top?'is-task-pinned':''}" data-action="task-pin" ${taskIdAttr(task)} aria-pressed="${!!task.top}" aria-label="${task.top?'取消置顶':'置顶任务'}：${esc(task.title)}" title="${task.top?'取消置顶':'置顶任务'}">${svg('pin')}</button>`;
 let widgetVisible = true, miniIndex = 0;
-let tasks, opacity = 76, dark = true, pinned = false, collapsed = false, selected = 'toz', view = 'today', query = '', historyOnly = false, saveError = '', mode = 'both', toastTimer;
+let reading={reduceTransparency:false,largeText:false};
+let tasks, opacity = 88, dark = true, pinned = false, collapsed = false, selected = 'toz', view = 'today', query = '', historyOnly = false, saveError = '', mode = 'both', toastTimer;
 let calendarMonth = TODAY.slice(0, 7), calendarQuery = '', calendarDetailOpen = false;
 const expandedDays = new Set();
 const expandedSubtasks=new Set();
@@ -77,7 +80,8 @@ try {
     if (saved.schema !== 1 || !Array.isArray(saved.tasks) || !saved.tasks.every(t => typeof t.id === 'string' && typeof t.title === 'string' && Array.isArray(t.events) && Array.isArray(t.subtasks))) throw new Error('invalid data');
     tasks = saved.tasks;recurrences=validateSeries(saved.recurrences||[]);
     projects = projectList(saved.projects,tasks);prefs=preferences(saved.preferences,projects,tasks);setProjectColors(prefs.projectColors);
-    opacity = Math.min(95, Math.max(35, Number(saved.opacity) || 76));
+    opacity = Math.min(95, Math.max(35, Number(saved.opacity) || 88));
+    const source=native?saved.settings:saved.reading;reading={reduceTransparency:source?.reduceTransparency===true,largeText:source?.largeText===true};
     dark = saved.dark !== false;
     if(native){dataVersion=saved.version;widgetVisible=saved.settings.widgetVisible!==false;pinned=!!saved.settings.widgetPinned;collapsed=!!saved.settings.widgetCollapsed;}
   } else tasks = native ? [] : seedTasks();
@@ -103,7 +107,7 @@ function save() {
       tasks=result.snapshot.tasks;recurrences=result.snapshot.recurrences||[];
       if(result.backupError)toast('任务已保存，但自动备份失败：'+result.backupError);
     }else{
-    localStorage.setItem('toz-prototype-v1', JSON.stringify({ schema: 1, referenceDate: TODAY, tasks, projects, opacity, dark, recurrences, preferences:prefs }));
+    localStorage.setItem('toz-prototype-v1', JSON.stringify({ schema: 1, referenceDate: TODAY, tasks, projects, opacity, dark, reading, recurrences, preferences:prefs }));
     }
     projectRenames={};saveError = '';
     $('#save-status').classList.remove('error');
@@ -166,17 +170,15 @@ function viewTasks() {
   return {...presentation,raw};
 }
 function taskMeta(task, widget = false) {
-  const days = duration(task), count = postponements(task).length;
-  const out = [];
-  if (!widget) out.push(`<span class="tag" data-project="${esc(task.project)}" style="--project-color:${projectColor(task.project)}">${esc(task.project)}</span>`);
-  if (days !== null) out.push(`<span>${task.done ? '历时' : '持续'} ${days} 天</span>`);
-  else out.push('<span>尚未开始</span>');
-  if (count) out.push(`<span class="amber">${svg('history')} 延期 ${count} 次</span>`);
-  if(!widget&&task.repeatId){const series=recurrences.find(s=>s.id===task.repeatId);out.push(`<span class="repeat-tag">${svg('history')} ${esc(series?recurrenceLabel(series):'周期任务')} · ${shortDate(task.repeatDate)}</span>`);}
+  const days=duration(task),count=postponements(task).length,out=[];
+  if(!widget)out.push(`<span class="tag" data-project="${esc(task.project)}" style="--project-color:${projectColor(task.project)}">${esc(task.project)}</span>`);
+  if(days!==null)out.push(`<span>${task.done?'历时':'持续'} ${days} 天</span>`);
+  if(count)out.push(`<span class="amber">延期 ${count} 次</span>`);
+  if(task.plan&&(!task.started||task.plan!==TODAY))out.push(`<time datetime="${esc(task.plan)}" class="${task.plan<TODAY&&!task.done?'amber':''}" title="计划完成：${esc(dateText(task.plan))}">${task.plan<TODAY&&!task.done?'逾期 · ':''}${compactDay(task.plan)}</time>`);
+  if(!widget&&task.repeatId){const series=recurrences.find(s=>s.id===task.repeatId);out.push(`<span class="repeat-tag" title="${esc(series?recurrenceLabel(series):'周期任务')} · ${esc(dateText(task.repeatDate))}">${svg('history')}重复 · ${compactDay(task.repeatDate)}</span>`);}
   const group=!widget&&!task.done?listSeriesGroups.get(task.repeatId):null;
   if(group&&group.tasks.length>1&&group.representative.id===task.id)out.push(`<button class="repeat-instances-toggle" data-action="toggle-repeat-instances" data-repeat="${esc(task.repeatId)}" aria-expanded="${group.expanded}" aria-label="${group.expanded?'收起':'展开'}${esc(task.title)}的其余${group.tasks.length-1}期">${svg(group.expanded?'collapse':'expand')}${group.expanded?'收起':'展开'}其余 ${group.tasks.length-1} 期</button>`);
-  if (visibleSubtasks(task).length) out.push(`<button type="button" class="subtasks-toggle" data-action="toggle-subtasks" ${taskIdAttr(task)} aria-expanded="${(widget?expandedWidgetSubtasks:expandedSubtasks).has(task.id)}" aria-controls="${widget?'widget':'inline'}-subtasks-${esc(task.id)}" aria-label="${(widget?expandedWidgetSubtasks:expandedSubtasks).has(task.id)?'收起':'展开'}${widget?'浮窗':''}子任务：${esc(task.title)}">${svg((widget?expandedWidgetSubtasks:expandedSubtasks).has(task.id)?'collapse':'expand')}${visibleSubtasks(task).filter(s => s.done).length}/${visibleSubtasks(task).length} 子任务</button>`);
-  if (!widget && task.plan && task.plan !== TODAY && (!task.repeatId||task.plan!==task.repeatDate)) out.push(`<span${task.plan < TODAY && !task.done ? ' class="amber"' : ''}>${shortDate(task.plan)}</span>`);
+  if(visibleSubtasks(task).length)out.push(`<button type="button" class="subtasks-toggle" data-action="toggle-subtasks" ${taskIdAttr(task)} aria-expanded="${(widget?expandedWidgetSubtasks:expandedSubtasks).has(task.id)}" aria-controls="${widget?'widget':'inline'}-subtasks-${esc(task.id)}" aria-label="${(widget?expandedWidgetSubtasks:expandedSubtasks).has(task.id)?'收起':'展开'}${widget?'浮窗':''}子任务：${esc(task.title)}">${svg((widget?expandedWidgetSubtasks:expandedSubtasks).has(task.id)?'collapse':'expand')}${visibleSubtasks(task).filter(s=>s.done).length}/${visibleSubtasks(task).length} 子任务</button>`);
   return out.join('<span class="meta-sep"></span>');
 }
 function inlineSubtasks(task,widget=false){
@@ -185,19 +187,21 @@ function inlineSubtasks(task,widget=false){
 function taskRow(task, widget = false) {
   return `<div class="${widget ? 'widget-row' : 'task-row'} ${task.done ? 'completed' : ''} ${selected === task.id && !widget ? 'selected' : ''}" ${taskIdAttr(task)} ${reorderAttrs(task)} data-action="select" role="group" tabindex="0" title="长按拖动排序 · Alt + ↑ / ↓ 调整顺序" aria-label="${esc(task.title)}">
   <button class="check-button ${task.done ? 'done' : ''}" data-action="complete" ${taskIdAttr(task)} aria-label="${task.done ? '重新打开' : '完成'}：${esc(task.title)}" aria-pressed="${!!task.done}">${task.done ? svg('check') : ''}</button>
-  <div class="task-body"><button class="task-title task-select" data-action="select" ${taskIdAttr(task)} aria-label="查看详情：${esc(task.title)}">${esc(task.title)}</button><div class="task-meta">${taskMeta(task, widget)}</div>${visibleSubtasks(task).length?inlineSubtasks(task,widget):''}</div>
-  ${pinButton(task)}${!task.done ? `<button class="row-reschedule" data-action="reschedule" ${taskIdAttr(task)} aria-label="调整计划：${esc(task.title)}" title="调整计划">${svg('calendar')}</button>` : ''}</div>`;
+  <div class="task-body"><button class="task-title task-select" data-action="select" ${taskIdAttr(task)} aria-label="查看详情：${esc(task.title)}">${esc(task.title)}${task.top?`<span class="task-pin-indicator" title="任务已置顶">${svg('pin')}</span>`:''}</button><div class="task-meta">${taskMeta(task, widget)}</div>${visibleSubtasks(task).length?inlineSubtasks(task,widget):''}</div>
+  <button class="icon-button row-more" data-action="more" ${taskIdAttr(task)} aria-label="更多操作：${esc(task.title)}" aria-haspopup="menu">${svg('more')}</button></div>`;
 }
 function renderList() {
   const project = view.startsWith('project:') ? view.slice(8) : '';
   const [label,title,subtitle] = names[view] || [project,`${project}，一点点推进。`,'把大事拆小，让每一步清楚可见。'];
   $('#breadcrumb').innerHTML = `我的空间 <span class="crumb-slash">/</span> ${esc(label)}`;
-  $('#view-title').textContent = title; $('#view-subtitle').textContent = subtitle;
+  $('#view-title').textContent = label; $('#view-subtitle').textContent = subtitle;
   $('#list-label').textContent = view === 'delayed' ? '有过延期的任务' : label === '今天' ? '今日清单' : label;
   const presentation=viewTasks(),list=presentation.items;listSeriesGroups=presentation.groups;
   const completed = list.filter(t => t.done), active = list.filter(t => !t.done);
   const total = presentation.raw.length, percent = total ? Math.round(completed.length / total * 100) : 0;
-  $('#progress-caption').textContent = `已完成 ${completed.length} / ${total} 项${total>list.length?' · 已收起 '+(total-list.length)+' 个后续期次':''}`;
+  $('#progress-caption').textContent = completed.length+' / '+total+' 已完成';
+  $('.progress-summary').style.setProperty('--progress',percent+'%');
+  $('#progress-detail').hidden=total<=list.length;$('#progress-detail').textContent=total>list.length?'已收起 '+(total-list.length)+' 个后续期次，进度按实际期数计算。':'';
   $('#progress-percent').textContent = percent + '%'; $('#progress-fill').style.width = percent + '%';
   let html = '';
   if (view === 'today') {
@@ -255,30 +259,39 @@ function renderDetail() {
   $('#task-detail').dataset.task=task.id;
   const days = duration(task), count = postponements(task).length, subs = visibleSubtasks(task);
   const events = task.events.filter(e=>!historyOnly || e.type==='later').slice().reverse();
-  $('#task-detail').innerHTML = `<div class="detail-toolbar"><span>${svg('folder')} ${esc(task.project)} <span>/</span> 任务详情</span><div class="detail-toolbar-tools"><button class="icon-button" data-action="more" ${taskIdAttr(task)} aria-label="任务更多操作">${svg('more')}</button>${pinButton(task)}<button class="icon-button" data-action="edit" ${taskIdAttr(task)} aria-label="编辑任务" title="编辑任务">${svg('sliders')}</button><button class="icon-button" data-action="export-task" ${taskIdAttr(task)} aria-label="导出此任务" title="导出此任务">${svg('external')}</button>${(view === 'calendar'||view==='gantt') ? `<button class="icon-button" data-action="calendar-close-detail" aria-label="关闭任务详情">${svg('close')}</button>` : ''}</div></div>
-  <span class="status-tag"><span class="live-dot"></span>${task.done ? '已完成' : task.started ? '进行中' : '待开始'}</span><h2 class="detail-title">${esc(task.title)}</h2><p class="detail-note">${esc(task.note || '让这件事，慢慢有一个清楚的样子。')}</p>
-  ${task.repeatId?repeatDetail(task):''}<div class="origin-card"><div class="origin-icon">${svg('calendar')}</div><div><div class="small-label">首次实际开始</div><b>${task.started ? dateText(task.started) : '尚未开始'}</b></div><span class="origin-lock">${svg('lock')}${task.started ? '保持不变' : '开始时记录'}</span></div>
-  <div class="date-fields"><div class="field-row"><span>${svg('calendar')}计划开始</span><b>${dateText(task.planStart)}</b></div><div class="field-row"><span>${svg('calendar')}最初计划完成</span><b>${dateText(task.initialPlan)}</b></div><div class="field-row"><span>${svg('calendar')}当前计划完成</span><b class="current">${dateText(task.plan)}${task.plan===TODAY?' · 今天':''}</b></div></div>
+  $('#task-detail').innerHTML = `<div class="detail-toolbar"><span>${svg('folder')} ${esc(task.project)} <span>/</span> 任务详情</span><div class="detail-toolbar-tools"><button class="icon-button" data-action="more" ${taskIdAttr(task)} aria-label="任务更多操作">${svg('more')}</button>${(view === 'calendar'||view==='gantt') ? `<button class="icon-button" data-action="calendar-close-detail" aria-label="关闭任务详情">${svg('close')}</button>` : ''}</div></div>
+  <span class="status-tag"><span class="live-dot"></span>${task.done ? '已完成' : task.started ? '进行中' : '待开始'}</span><h2 class="detail-title">${esc(task.title)}</h2><p class="detail-note">${esc(task.note || '')}</p>
+  ${task.repeatId?repeatDetail(task):''}<div class="origin-card"><div class="origin-icon">${svg('lock')}</div><div><div class="small-label">首次实际开始</div><b title="${esc(dateText(task.started))}">${task.started ? displayDate(task.started) : '尚未开始'}</b></div><span class="origin-lock">${svg('lock')}${task.started ? '保持不变' : '开始时记录'}</span></div>
+  <div class="date-fields"><div class="field-row"><span>${svg('calendar')}计划开始</span><b title="${esc(dateText(task.planStart))}">${displayDate(task.planStart)}</b></div><div class="field-row"><span>${svg('calendar')}最初计划完成</span><b title="${esc(dateText(task.initialPlan))}">${displayDate(task.initialPlan)}</b></div><div class="field-row"><span>${svg('calendar')}当前计划完成</span><b class="current" title="${esc(dateText(task.plan))}">${displayDate(task.plan)}${task.plan===TODAY?' · 今天':''}</b></div></div>
   <div class="detail-stats"><div><strong>${days===null?'—':days}</strong>${days===null?'':'<small>天</small>'}<label>${task.done?'完成历时':'已持续'}</label></div><div><strong>${count}</strong><small>次</small><label>计划延期</label></div><div><strong>${shiftedDays(task)}</strong><small>天</small><label>累计后移</label></div></div>
-  <div class="detail-actions">${task.done ? `<button class="button primary" data-action="complete" ${taskIdAttr(task)}>${svg('history')}重新打开</button>` : `<button class="button primary" data-action="reschedule" ${taskIdAttr(task)}>${svg('calendar')}调整计划</button>${task.started ? `<button class="button secondary" data-action="complete" ${taskIdAttr(task)}>${svg('check')}完成任务</button>` : `<button class="button secondary" data-action="start" ${taskIdAttr(task)}>${svg('play')}开始任务</button>`}`}</div>
+  <div class="detail-actions">${task.done ? `<button class="button primary" data-action="complete" ${taskIdAttr(task)}>${svg('history')}重新打开</button>` : `<button class="button secondary" data-action="reschedule" ${taskIdAttr(task)}>${svg('calendar')}调整计划</button>${task.started ? `<button class="button primary" data-action="complete" ${taskIdAttr(task)}>${svg('check')}完成任务</button>` : `<button class="button primary" data-action="start" ${taskIdAttr(task)}>${svg('play')}开始任务</button>`}`}</div>
   <section class="detail-section"><h3 class="section-heading">子任务 <small>${subs.filter(s=>s.done).length} / ${subs.length}</small></h3>${subs.map(s=>`<div data-subtask-row="${esc(s.id)}" ${taskIdAttr(task)} tabindex="0" class="subtask ${s.done?'is-done':''}"><button class="check-button ${s.done?'done':''}" data-action="subtask" ${taskIdAttr(task)} data-subtask="${esc(s.id)}" aria-label="${s.done?'重新打开':'完成'}子任务：${esc(s.title)}" aria-pressed="${!!s.done}">${s.done?svg('check'):''}</button><span class="subtask-name" title="双击编辑名称与日期">${esc(s.title)}${subtaskDates(s)}</span><button class="subtask-edit icon-button" data-action="edit-subtask" ${taskIdAttr(task)} data-subtask="${esc(s.id)}" aria-label="编辑子任务：${esc(s.title)}">${svg('sliders')}</button></div>`).join('')}${!task.done ? `<form class="subtask-form" id="subtask-form"><input name="title" placeholder="添加子任务…" maxlength="120" required aria-label="新子任务标题"><button type="button" data-action="new-subtask-dated" ${taskIdAttr(task)} title="设置子任务日期" aria-label="添加带日期的子任务">${svg('calendar')}</button><button type="submit" title="添加子任务" aria-label="添加子任务">${svg('plus')}</button></form><p class="subtask-add-hint">可直接添加，或点日历设置开始与截止日期。</p>` : ''}</section>
   <section class="detail-section"><h3 class="section-heading">任务足迹 <button data-action="history-filter" aria-pressed="${historyOnly}">${historyOnly?'显示全部':'仅看延期'} ↕</button></h3><div class="timeline">${events.map(eventMarkup).join('') || '<p class="timeline-reason">还没有延期记录。</p>'}</div></section>`;
 }
 function renderWidget() {
   const listScrollTop=$('#widget .widget-list')?.scrollTop||0;
-  const daily = widgetTasks(), active = daily.filter(t=>!t.done), done = daily.filter(t=>t.done).length;
-  const percent = daily.length ? Math.round(done/daily.length*100) : 0;
+  const daily=widgetTasks(),active=daily.filter(t=>!t.done),done=daily.filter(t=>t.done).length;
   $('#widget').classList.toggle('collapsed',collapsed);
-  $('#widget').innerHTML = `<div class="widget-header" title="拖动可在预览画布中移动"><div class="widget-title">${svg('sun')}今天</div><div class="widget-mini" id="widget-mini"></div><div class="widget-tools"><button class="icon-button ${pinned?'is-pinned':''}" data-action="pin" aria-label="置顶状态演示" aria-pressed="${pinned}" title="置顶状态演示">${svg('pin')}</button><button class="icon-button" data-action="collapse" aria-label="${collapsed?'展开':'折叠'}浮窗" aria-expanded="${!collapsed}">${svg(collapsed?'expand':'collapse')}</button><button class="icon-button" data-action="open-client" aria-label="打开客户端预览" title="打开客户端预览">${svg('external')}</button></div></div><div class="widget-content"><div class="widget-date">${dateText(TODAY)}</div><div class="widget-project-filter"><span>${svg('folder')}</span><select id="widget-project" aria-label="悬浮窗分区筛选"><option value="">全部分区</option>${shownProjects().map(name=>`<option value="${esc(name)}" ${prefs.widgetProject===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="widget-filter-count">${active.length} 项待办</span></div><div class="widget-progress"><div><span>${done} / ${daily.length} 已完成</span><span>还剩 ${active.length} 项</span></div><div class="progress-track"><span style="width:${percent}%"></span></div></div><div class="widget-list">${active.map(t=>taskRow(t,true)).join('') || `<div class="empty-state">${svg('checkCircle')}今天已安排妥当。</div>`}</div><div class="widget-footer"><button class="widget-add" data-action="new">${svg('plus')}添加待办</button><button class="icon-button" data-action="settings" aria-label="调整透明度" title="调整透明度">${svg('sliders')}</button></div><div class="widget-bottom-label">今天的事，慢慢做好。</div></div>`;
-  $('#widget .widget-list').scrollTop=listScrollTop;
-  renderMiniWidget();
-  if(native){const pin=$('#widget [data-action="pin"]');pin.title='始终置顶';pin.setAttribute('aria-label','浮窗始终置顶');$('#widget .widget-header').title='拖动移动浮窗';}
+  $('#widget').innerHTML=`<div class="widget-header" title="${native?'拖动移动；双击展开或收缩':'拖动可在预览画布中移动'}"><div class="widget-title">${svg('sun')}今天</div><div class="widget-mini" id="widget-mini"></div><div class="widget-tools"><button class="icon-button" data-action="widget-menu" aria-label="浮窗选项" aria-haspopup="menu">${svg('more')}</button><button class="icon-button" data-action="collapse" aria-label="${collapsed?'展开':'折叠'}浮窗" aria-expanded="${!collapsed}">${svg(collapsed?'expand':'collapse')}</button></div></div><div class="widget-content"><div class="widget-date" title="${esc(dateText(TODAY))}">${displayDate(TODAY)}</div><div class="widget-project-filter"><select id="widget-project" aria-label="悬浮窗分区筛选"><option value="">全部分区</option>${shownProjects().map(name=>`<option value="${esc(name)}" ${prefs.widgetProject===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="widget-filter-count">${active.length} 项待办</span></div><div class="widget-progress"><div><span>${done} / ${daily.length} 已完成</span></div></div><div class="widget-list">${active.map(t=>taskRow(t,true)).join('')||`<div class="empty-state">${svg('checkCircle')}今天已安排妥当。</div>`}</div><div class="widget-footer"><button class="widget-add" data-action="new">${svg('plus')}添加待办<kbd>N</kbd></button></div><div class="widget-bottom-label"><span>${svg('shield')}${saveError?'保存异常 · 请导出':'已保存在本机'}</span><span>${pinned?'窗口已置顶':'窗口未置顶'}</span></div></div>`;
+  $('#widget .widget-list').scrollTop=listScrollTop;renderMiniWidget();
 }
 function render() { contextMenu?.close();const toggle=$('.desktop-titlebar [data-action="toggle-widget"]');toggle.setAttribute('aria-pressed',String(widgetVisible));toggle.setAttribute('aria-label',widgetVisible?'隐藏悬浮框':'显示悬浮框');applyAppearance(); renderList(); renderDetail(); renderWidget(); refreshNativeDates(); }
 function applyAppearance(){
   document.documentElement.dataset.theme=dark?'dark':'light';
   document.documentElement.style.colorScheme=dark?'dark':'light';
+  document.documentElement.classList.toggle('reduce-transparency',reading.reduceTransparency);document.documentElement.classList.toggle('large-text',reading.largeText);
+  document.querySelectorAll('[data-reading]').forEach(input=>input.checked=reading[input.dataset.reading]);
   document.querySelectorAll('.appearance-switch button').forEach(button=>button.setAttribute('aria-pressed',String((button.dataset.action==='theme-dark')===dark)));
+}
+async function setReadingPreference(key,value){
+  if(!['reduceTransparency','largeText'].includes(key)||typeof value!=='boolean')throw new Error('无效阅读设置');
+  if(native){const saved=await native.configure({[key]:value});reading={reduceTransparency:saved.reduceTransparency===true,largeText:saved.largeText===true};}
+  else{const before=reading;reading={...reading,[key]:value};if(!save()){reading=before;applyAppearance();throw new Error(saveError);}}
+  applyAppearance();
+}
+async function openSettings(tab='appearance'){
+  if(native?.surface==='widget'){await nativeCommand('open-main',{action:'settings',tab});return;}
+  if(native)await refreshDesktopSettings();selectSettingsTab(tab);openDialog('#settings-dialog');
 }
 function openProject(name=null){
   if(native?.surface==='widget'){nativeCommand('open-main',{action:'project',name});return;}
@@ -322,12 +335,12 @@ document.addEventListener('click',event=>{const preset=event.target.closest('[da
 
 function refreshNativeDates(){
   $('.desktop-clock small').textContent=new Date(TODAY+'T12:00:00').toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'})+' · '+lunarText(TODAY);
-  $('#date-label').textContent=new Date(TODAY+'T12:00:00').toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'})+' · '+lunarText(TODAY);
+  $('#date-label').textContent=new Date(TODAY+'T12:00:00').toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'});$('#date-label').title=dateText(TODAY);
   const tomorrow=addDays(TODAY,1),weekday=new Date(TODAY+'T12:00:00').getDay(),friday=addDays(TODAY,(5-weekday+7)%7||7),week=addDays(TODAY,7);
   $('.date-shortcuts').innerHTML=[[tomorrow,'明天'],[friday,'下一个周五'],[week,'一周后']].map(([date,label])=>`<button type="button" data-date="${date}">${label} · ${shortDate(date)}</button>`).join('');
 }
 function applySnapshot(snapshot){
-  dataVersion=snapshot.version;widgetVisible=snapshot.settings?.widgetVisible!==false;tasks=snapshot.tasks;recurrences=snapshot.recurrences||[];projects=projectList(snapshot.projects,tasks);prefs=preferences(snapshot.preferences,projects,tasks);setProjectColors(prefs.projectColors);opacity=snapshot.opacity;dark=snapshot.dark;pinned=!!snapshot.settings?.widgetPinned;collapsed=!!snapshot.settings?.widgetCollapsed;
+  dataVersion=snapshot.version;widgetVisible=snapshot.settings?.widgetVisible!==false;tasks=snapshot.tasks;recurrences=snapshot.recurrences||[];projects=projectList(snapshot.projects,tasks);prefs=preferences(snapshot.preferences,projects,tasks);setProjectColors(prefs.projectColors);opacity=snapshot.opacity;dark=snapshot.dark;reading={reduceTransparency:snapshot.settings?.reduceTransparency===true,largeText:snapshot.settings?.largeText===true};pinned=!!snapshot.settings?.widgetPinned;collapsed=!!snapshot.settings?.widgetCollapsed;
   if(!tasks.some(t=>t.id===selected&&!t.deletedAt))selected=tasks.find(t=>!t.deletedAt&&!t.cancelled)?.id||null;
   document.documentElement.style.setProperty('--widget-alpha',opacity/100);$('#opacity-range').value=opacity;$('#opacity-value').value=opacity+'%';render();
   if($('#trash-dialog').open)renderTrash();
@@ -412,7 +425,9 @@ document.addEventListener('click',async event=>{
     case 'task-pin':if(task)mutate(()=>toggleTaskPin(task),task.top?'已取消置顶':'任务已置顶');break;
     case 'toggle-widget':if(event.detail>1)break;if(native)await nativeCommand('toggle-widget');else{widgetVisible=!widgetVisible;$('.widget-stage').hidden=!widgetVisible;render();}break;
     case 'theme-light':case 'theme-dark':dark=target.dataset.action==='theme-dark';save();applyAppearance();reportRenderer();break;
-    case 'settings':if(native?.surface==='widget'){nativeCommand('open-main',{action:'settings'});break;}if(native)await refreshDesktopSettings();openDialog('#settings-dialog');break;
+    case 'settings':await openSettings();break;
+    case 'app-menu':contextMenu.openAt(target,{kind:'app',label:'ToZ'});break;
+    case 'widget-menu':if(native)await nativeCommand('widget-menu');else contextMenu.openAt(target,{kind:'widget',label:'浮窗选项'});break;
     case 'guide':openDialog('#guide-dialog');break;
     case 'search':$('#global-search').focus();break;
     case 'wallpaper':$('#desktop-scene').classList.toggle('dark');break;
@@ -450,7 +465,7 @@ $('#new-form').addEventListener('submit',event=>{
     else view=todayTasks([task]).length?'today':upcomingTasks([task]).length?'upcoming':'all';
     historyOnly=false;const ok=save();render();reportRenderer();
     if(!ok){form.querySelector('.form-error').textContent=saveError;return;}
-    $('#new-dialog').close();toast('待办已创建并置顶，点击“开始任务”记录首次开始');
+    $('#new-dialog').close();toast('待办已创建，点击“开始任务”记录首次开始');
   }catch(error){form.querySelector('.form-error').textContent=error.message;}
 });
 $('#reschedule-form').addEventListener('submit',event=>{
@@ -469,6 +484,7 @@ document.addEventListener('keydown',event=>{
   if($('dialog[open]'))return;const editing=/INPUT|TEXTAREA|SELECT/.test(event.target.tagName)||event.target.isContentEditable;
   if(event.key==='Escape'&&calendarDetailOpen){calendarDetailOpen=false;renderList();}
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();if(mode==='widget')setMode('both');$('#global-search').focus();}
+  if((event.ctrlKey||event.metaKey)&&event.key===','){event.preventDefault();openSettings();}
   if(!editing&&!event.ctrlKey&&!event.metaKey&&event.key.toLowerCase()==='n'){event.preventDefault();openNew();}
 });
 // Dragging is confined to the simulated desktop, not the operating system.
@@ -507,12 +523,12 @@ if(native?.surface==='quick-add'){
   $('#new-dialog').prepend(titlebar);
   $('#new-dialog').addEventListener('close',()=>nativeCommand('close-quick-add'));
 }
-mountDatePickers();hydrateIcons();mountDesktopSettings(toast);if(!saveError)ensureRecurrences();render();
+mountDatePickers();hydrateIcons();mountDesktopSettings(toast,{setReading:setReadingPreference});if(!saveError)ensureRecurrences();render();
 if(native){
   if(native.surface==='quick-add')openNew(new URLSearchParams(location.search).get('date')||undefined);
   reportRenderer();
   native.onState(snapshot=>{if(snapshot.version>dataVersion)applySnapshot(snapshot);});
-  native.onCommand(async command=>{if(!command)return;if(['gantt','calendar','today'].includes(command.action)){$('dialog[open]')?.close();view=command.action;calendarDetailOpen=false;render();reportRenderer();}if(command.action==='new')openNew(command.date);if(command.action==='project')openProject(command.name);if(command.action==='edit'){selected=command.id;view='all';render();openEdit(tasks.find(t=>t.id===command.id));}if(command.action==='edit-subtask')openSubtaskEdit(command.id,command.subId);if(command.action==='trash')openTrash();if(command.action==='add-subtask'){selected=command.id;view='all';render();$('#subtask-form input')?.focus();}if(command.action==='settings'){await refreshDesktopSettings();openDialog('#settings-dialog');}if(command.action==='select'||command.action==='reschedule'){selected=command.id;view='all';render();if(command.action==='reschedule')openReschedule(command.id);}});
+  native.onCommand(async command=>{if(!command)return;if(['gantt','calendar','today'].includes(command.action)){$('dialog[open]')?.close();view=command.action;calendarDetailOpen=false;render();reportRenderer();}if(command.action==='new')openNew(command.date);if(command.action==='project')openProject(command.name);if(command.action==='edit'){selected=command.id;view='all';render();openEdit(tasks.find(t=>t.id===command.id));}if(command.action==='edit-subtask')openSubtaskEdit(command.id,command.subId);if(command.action==='trash')openTrash();if(command.action==='add-subtask'){selected=command.id;view='all';render();$('#subtask-form input')?.focus();}if(command.action==='settings')await openSettings(command.tab);if(command.action==='select'||command.action==='reschedule'){selected=command.id;view='all';render();if(command.action==='reschedule')openReschedule(command.id);}});
   setInterval(()=>{if(refreshToday()){calendarMonth=TODAY.slice(0,7);ensureRecurrences();render();}},30000);
   window.addEventListener('focus',()=>{if(refreshToday()){ensureRecurrences();render();}});
 }
@@ -527,18 +543,50 @@ function resolveContext(element){
   return task?{kind:'task',id:task.id,label:task.title}:null;
 }
 function contextItems(entity){
+  if(entity.kind==='app')return [
+    {key:'app-new',label:'添加待办',icon:'plus',shortcut:'N'},
+    {key:'app-search',label:'搜索任务',icon:'search',shortcut:'Ctrl K'},
+    {separator:true},{key:'app-widget',label:widgetVisible?'隐藏桌面浮窗':'显示桌面浮窗',icon:'layers'},
+    {key:'app-settings',label:'设置…',icon:'settings',shortcut:'Ctrl ,'},
+    {separator:true},{key:'app-export',label:'导出完整备份…',icon:'shield'},
+    {key:'app-about',label:'关于 ToZ',icon:'info'},
+    ...(native?[{separator:true},{key:'app-quit',label:'退出 ToZ',icon:'external'}]:[])
+  ];
+  if(entity.kind==='widget')return [
+    {key:'widget-pin',label:'窗口始终置顶',icon:'pin',type:'checkbox',checked:pinned},
+    {key:'widget-collapse',label:collapsed?'展开浮窗':'折叠浮窗',icon:collapsed?'expand':'collapse'},
+    {separator:true},{key:'app-settings',label:'外观与阅读…',icon:'settings'},
+    {key:'widget-client',label:'打开工作台',icon:'external'}
+  ];
   if(entity.kind==='project')return [{key:'edit-project',label:'编辑名称与颜色'},{key:'new-project',label:'新建分区'},{key:'delete-project',label:'删除分区…',danger:true}];
   const task=tasks.find(t=>t.id===entity.id);if(!task)return [];
   if(entity.kind==='subtask'){const sub=task.subtasks.find(s=>s.id===entity.subId);return [{key:'edit-subtask',label:'编辑子任务'},{key:'toggle-subtask',label:sub.done?'重新打开子任务':'完成子任务'},{key:'delete-subtask',label:'删除子任务',danger:true}];}
-  const out=[{key:'edit-task',label:'编辑任务'},{key:'move-project',label:'移动到分区',children:shownProjects().map(name=>({key:'move-project',label:name,value:name,color:projectColor(name),checked:task.project===name}))},{key:'pin',label:task.top?'取消置顶':'置顶任务'},{key:'complete',label:task.done?'重新打开任务':'完成任务'}];
-  if(!task.done){if(!task.started)out.push({key:'start',label:'开始任务'});out.push({key:'reschedule',label:'调整计划…'},{key:'add-subtask',label:'添加子任务'});}
+  const out=[{key:'complete',label:task.done?'重新打开任务':'完成任务',icon:task.done?'history':'checkCircle'}];
+  if(!task.done){if(!task.started)out.push({key:'start',label:'开始任务',icon:'play'});out.push({key:'reschedule',label:'调整计划…',icon:'calendar'});}
+  out.push({separator:true},{key:'edit-task',label:'编辑任务…',icon:'sliders'},{key:'move-project',label:'移动到分区',icon:'folder',children:shownProjects().map(name=>({key:'move-project',label:name,value:name,color:projectColor(name),checked:task.project===name}))},{key:'pin',label:task.top?'取消任务置顶':'置顶任务',icon:'pin',type:'checkbox',checked:!!task.top});
+  if(!task.done)out.push({key:'add-subtask',label:'添加子任务',icon:'plus'});
+  out.push({key:'export-task',label:'导出此任务…',icon:'external'});
   if(recurrences.some(s=>s.id===task.repeatId&&s.active))out.push({key:'stop-repeat',label:'停止后续重复'});
-  out.push({key:'delete-task',label:task.repeatId?'删除本期任务':'删除任务',danger:true});return out;
+  out.push({separator:true},{key:'delete-task',label:task.repeatId?'本期任务移入回收站':'移入回收站',icon:'trash',danger:true});return out;
 }
 function contextCommand(key,entity,value){
+  if(entity.kind==='app'||entity.kind==='widget'){
+    if(key==='app-new')openNew();
+    if(key==='app-search'){if(mode==='widget')setMode('both');$('#global-search').focus();}
+    if(key==='app-settings')openSettings();
+    if(key==='app-about')openSettings('about');
+    if(key==='app-export')document.querySelector('[data-action="export"]').click();
+    if(key==='app-quit')nativeCommand('quit');
+    if(key==='app-widget')document.querySelector('[data-action="toggle-widget"]').click();
+    if(key==='widget-pin'){pinned=!pinned;renderWidget();toast('窗口置顶状态演示；实际置顶请使用客户端');}
+    if(key==='widget-collapse'){collapsed=!collapsed;renderWidget();}
+    if(key==='widget-client'){setMode('both');$('.client-stage').scrollIntoView({behavior:'smooth',block:'start'});}
+    return;
+  }
   const task=tasks.find(t=>t.id===entity.id&&!t.deletedAt);
   if(key==='edit-project'){openProject(entity.name);return;}if(key==='new-project'){openProject();return;}if(key==='delete-project'){openDeleteProject(entity.name);return;}
   if(!task){toast('任务已更新，请重新打开菜单');return;}
+  if(key==='export-task'){if(native)nativeCommand('export',{taskId:task.id});else exportJson({tasks:[task],projects,preferences:{...prefs,taskOrder:[task.id]},recurrences:recurrences.filter(s=>s.id===task.repeatId).map(s=>({...s,active:false}))},`ToZ-任务-${task.id}.json`);return;}
   if(key==='move-project'){if(task.project===value){toast('任务已在此分区');return;}mutate(()=>moveTask(dataState(),task.id,value),'任务已移入“'+value+'”');return;}
   if(key==='edit-subtask'){openSubtaskEdit(task.id,entity.subId);return;}
   if(key==='edit-task'){if(native?.surface==='widget')nativeCommand('open-main',{action:'edit',id:task.id});else openEdit(task);return;}
@@ -618,7 +666,7 @@ function initializeActions(){
     const form=event.target.form,start=event.target.value,end=form.elements.date;
     if(start&&end.value&&start>end.value){end.value=start;syncDatePickers();toast('完成日期已跟随开始日期调整');}
   },true);
-  contextMenu=mountContextMenu({resolve:resolveContext,items:contextItems,onCommand:contextCommand});
+  contextMenu=mountContextMenu({resolve:resolveContext,items:contextItems,onCommand:contextCommand,icon:svg});
   document.addEventListener('dblclick',event=>{const row=event.target.closest('[data-subtask-row]');if(row&&!event.target.closest('button'))openSubtaskEdit(row.dataset.task,row.dataset.subtaskRow);});
   $('#subtask-edit-form').addEventListener('submit',event=>{event.preventDefault();const form=event.currentTarget;try{const task=tasks.find(t=>t.id===subtaskEdit.taskId);const dates={planStart:form.elements.startDate.value||null,plan:form.elements.date.value||null};if(subtaskEdit.subId)editSubtask(task,subtaskEdit.subId,form.elements.title.value,dates);else addSubtask(task,form.elements.title.value,dates.planStart,dates.plan);if(!save()){form.querySelector('.form-error').textContent=saveError;return;}render();$('#subtask-edit-dialog').close();toast('子任务已保存');}catch(error){form.querySelector('.form-error').textContent=error.message;}});
   $('#delete-project-form').addEventListener('change',updateDeleteProjectHint);

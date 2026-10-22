@@ -3,7 +3,20 @@
 !include LogicLib.nsh
 !include FileFunc.nsh
 
+; Use Windows interface typography and ToZ's neutral surfaces.
+SetFont "Microsoft YaHei UI" 9
+!define MUI_BGCOLOR "F8F8F7"
+!define MUI_TEXTCOLOR "252527"
+!define MUI_FINISHPAGE_TITLE "一切就绪。"
+!define MUI_FINISHPAGE_TEXT "ToZ 已准备好。为今天，做好一件小事。$\r$\n$\r$\n任务保存在当前账户的数据目录，与程序安装位置分开。卸载默认保留任务与备份。"
+!define MUI_FINISHPAGE_RUN_TEXT "启动 ToZ"
+
 !ifndef BUILD_UNINSTALLER
+!macro customWelcomePage
+  !define MUI_WELCOMEPAGE_TITLE "为日常，留一个位置。"
+  !define MUI_WELCOMEPAGE_TEXT "ToZ 是一个离线待办工作台。$\r$\n$\r$\n接下来选择安装范围、程序目录和使用习惯。无需账户，不依赖业务服务器。$\r$\n$\r$\n升级或更换安装位置，不会清空当前账户的任务。"
+  !insertmacro MUI_PAGE_WELCOME
+!macroend
 Var ToZDesktop
 Var ToZStartMenu
 Var ToZAutoStart
@@ -42,25 +55,31 @@ Var ToZAutoCheck
 !macroend
 
 Function ToZOptionsPage
-  !insertmacro MUI_HEADER_TEXT "安装选项" "选择快捷方式和开机启动方式。"
+  !insertmacro MUI_HEADER_TEXT "按你的习惯开始。" "快捷方式与启动方式由你决定，以后也可以在设置中调整。"
   nsDialogs::Create 1018
   Pop $0
   ${If} $0 == error
     Abort
   ${EndIf}
-  ${NSD_CreateLabel} 0 0 100% 25u "ToZ 将离线保存您的任务。您可以在客户端设置中随时更改启动选项。"
+  SetCtlColors $0 "252527" "F8F8F7"
+  ${NSD_CreateLabel} 0 0 100% 25u "你的任务，留在本机。程序与数据分开保存。"
   Pop $0
+  SetCtlColors $0 "64646A" "F8F8F7"
   ${NSD_CreateCheckbox} 0 38u 100% 14u "创建桌面快捷方式"
   Pop $ToZDesktopCheck
+  SetCtlColors $ToZDesktopCheck "252527" "F8F8F7"
   ${NSD_SetState} $ToZDesktopCheck $ToZDesktop
-  ${NSD_CreateCheckbox} 0 66u 100% 14u "创建开始菜单快捷方式"
+  ${NSD_CreateCheckbox} 0 66u 100% 14u "添加到开始菜单"
   Pop $ToZMenuCheck
+  SetCtlColors $ToZMenuCheck "252527" "F8F8F7"
   ${NSD_SetState} $ToZMenuCheck $ToZStartMenu
   ${NSD_CreateCheckbox} 0 94u 100% 14u "当前账户登录 Windows 后自动启动 ToZ"
   Pop $ToZAutoCheck
+  SetCtlColors $ToZAutoCheck "252527" "F8F8F7"
   ${NSD_SetState} $ToZAutoCheck $ToZAutoStart
-  ${NSD_CreateLabel} 0 130u 100% 30u "数据保存在当前用户的应用数据目录，升级或更改安装位置不会清空任务。卸载时默认保留任务与备份。"
+  ${NSD_CreateLabel} 0 130u 100% 30u "自启动默认关闭，由你选择是否开启。$\r$\n升级不清空任务；卸载时默认保留任务与备份。"
   Pop $0
+  SetCtlColors $0 "64646A" "F8F8F7"
   nsDialogs::Show
 FunctionEnd
 

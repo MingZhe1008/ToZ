@@ -1,4 +1,4 @@
-export function mountContextMenu({resolve,items,onCommand}){
+export function mountContextMenu({resolve,items,onCommand,icon=()=>''}){
   const panel=(label,extra='')=>{const el=document.createElement('div');el.className='context-menu '+extra;el.role='menu';el.hidden=true;el.setAttribute('aria-label',label);document.body.append(el);return el;};
   const menu=panel('操作菜单'),submenu=panel('移动到分区','context-submenu');
   let target=null,origin=null,parentButton=null,hideTimer;
@@ -6,12 +6,15 @@ export function mountContextMenu({resolve,items,onCommand}){
   const closeSubmenu=()=>{clearTimeout(hideTimer);submenu.hidden=true;parentButton?.setAttribute('aria-expanded','false');parentButton=null;};
   const close=(focus=false)=>{closeSubmenu();menu.hidden=true;target=null;if(focus&&origin?.isConnected)origin.focus({preventScroll:true});};
   function addButton(root,item){
-    const button=document.createElement('button');button.type='button';button.role=item.checked===undefined?'menuitem':'menuitemradio';button.dataset.contextCommand=item.key;button.setAttribute('aria-label',item.label);button.title=item.label;button.disabled=!!item.disabled;models.set(button,item);
+    if(item.separator){const divider=document.createElement('div');divider.className='context-menu-separator';divider.role='separator';root.append(divider);return;}
+    const button=document.createElement('button');button.type='button';button.role=item.checked===undefined?'menuitem':item.type==='checkbox'?'menuitemcheckbox':'menuitemradio';button.dataset.contextCommand=item.key;button.setAttribute('aria-label',item.label);button.title=item.label;button.disabled=!!item.disabled;models.set(button,item);
+    if(item.icon){const glyph=document.createElement('span');glyph.className='context-icon';glyph.setAttribute('aria-hidden','true');glyph.innerHTML=icon(item.icon);button.append(glyph);}
     if(item.danger)button.classList.add('danger');
     if(item.color){const dot=document.createElement('i');dot.className='context-color';dot.style.backgroundColor=item.color;dot.setAttribute('aria-hidden','true');button.append(dot);}
     const label=document.createElement('span');label.className='context-item-label';label.textContent=item.label;button.append(label);
     if(item.checked!==undefined){button.setAttribute('aria-checked',String(item.checked));if(item.checked){const mark=document.createElement('span');mark.className='context-current';mark.textContent='✓';mark.setAttribute('aria-hidden','true');button.append(mark);}}
     if(item.children){button.setAttribute('aria-haspopup','menu');button.setAttribute('aria-expanded','false');const arrow=document.createElement('span');arrow.className='context-submenu-arrow';arrow.textContent='›';arrow.setAttribute('aria-hidden','true');button.append(arrow);}
+    if(item.shortcut){const hint=document.createElement('kbd');hint.className='context-shortcut';hint.textContent=item.shortcut;button.append(hint);}
     root.append(button);return button;
   }
   function openSubmenu(button,focus=false){

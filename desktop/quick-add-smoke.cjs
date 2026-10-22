@@ -36,7 +36,7 @@ module.exports=async function quickAddSmoke({store,mainWindow,widgetWindow,getQu
       window.setSize(500,780);await pause();layouts.push(await layout(window));
       const titlebar=await js(window,`(() => {const bar=document.querySelector('.quick-add-titlebar'),style=getComputedStyle(bar),rect=bar.getBoundingClientRect(),controls=navigator.windowControlsOverlay;return {theme:document.documentElement.dataset.theme,background:style.backgroundColor,color:style.color,drag:style.getPropertyValue('-webkit-app-region'),height:rect.height,top:rect.top,overlay:!!controls?.visible,controlAreaHeight:controls?.getTitlebarAreaRect().height};})()`);
       titlebars.push(titlebar);
-      check(titlebar.overlay&&titlebar.top===0&&titlebar.height===34&&titlebar.drag==='drag'&&titlebar.background===(dark?'rgb(37, 37, 40)':'rgb(242, 242, 247)')&&titlebar.color===(dark?'rgb(245, 245, 247)':'rgb(29, 29, 31)'),(dark?'深色':'浅色')+'新增标题栏与原生窗口按钮区域随应用主题同步');
+      check(titlebar.overlay&&titlebar.top===0&&titlebar.height===38&&titlebar.drag==='drag'&&titlebar.background===(dark?'rgb(37, 37, 39)':'rgb(248, 248, 247)')&&titlebar.color===(dark?'rgb(240, 240, 242)':'rgb(37, 37, 39)'),(dark?'深色':'浅色')+'新增标题栏与原生窗口按钮区域随应用主题同步');
       if(outputDirectory)fs.writeFileSync(path.join(outputDirectory,`quick-add-${dark?'dark':'light'}.png`),(await window.webContents.capturePage()).toPNG());
       window.setSize(380,480);await pause();layouts.push(await layout(window));
       if(outputDirectory)fs.writeFileSync(path.join(outputDirectory,`quick-add-small-${dark?'dark':'light'}.png`),(await window.webContents.capturePage()).toPNG());

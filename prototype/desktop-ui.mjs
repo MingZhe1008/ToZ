@@ -1,36 +1,55 @@
-export function mountDesktopSettings(toast){
-  if(!window.toz)return;
+const tabs=['appearance','startup','data','about'];
+export function selectSettingsTab(tab='appearance',{focus=false}={}){
+  const selected=tabs.includes(tab)?tab:'appearance';
+  document.querySelectorAll('[data-settings-tab]').forEach(button=>{
+    const active=button.dataset.settingsTab===selected;button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1;
+    if(active&&focus)button.focus();
+  });
+  document.querySelectorAll('.settings-panel').forEach(panel=>panel.hidden=panel.id!==`settings-${selected}`);
+  const body=document.querySelector('#settings-dialog .dialog-body');if(body)body.scrollTop=0;
+}
+export function mountDesktopSettings(toast,{setReading}={}){
   const dialog=document.querySelector('#settings-dialog');
-  const body=dialog.querySelector('.dialog-body');
-  dialog.querySelector('h2').textContent='设置';
-  const section=document.createElement('div');section.className='native-settings';section.id='native-settings';
+  dialog.querySelector('.settings-tabs').addEventListener('click',event=>{const button=event.target.closest('[data-settings-tab]');if(button)selectSettingsTab(button.dataset.settingsTab);});
+  dialog.querySelector('.settings-tabs').addEventListener('keydown',event=>{
+    const button=event.target.closest('[data-settings-tab]');if(!button||!['ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+    event.preventDefault();const index=tabs.indexOf(button.dataset.settingsTab),delta=['ArrowUp','ArrowLeft'].includes(event.key)?-1:1;
+    selectSettingsTab(tabs[event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+delta+tabs.length)%tabs.length],{focus:true});
+  });
+  dialog.addEventListener('change',async event=>{
+    const input=event.target.closest('[data-reading]');if(!input)return;input.disabled=true;
+    try{await setReading(input.dataset.reading,input.checked);toast('阅读设置已保存');}catch(error){input.checked=!input.checked;toast(error.message);}finally{input.disabled=false;}
+  });
+  selectSettingsTab();
+  if(!window.toz)return;
+  const section=dialog.querySelector('#native-settings');
   section.innerHTML=[
-    ['autoLaunch','开机自启动','登录 Windows 后自动运行 ToZ'],
-    ['startMinimized','自启动时收至托盘','开机时保留浮窗，不弹出主界面'],
-    ['closeToTray','关闭主窗口时收至托盘','从托盘菜单选择退出可完全关闭'],
+    ['autoLaunch','登录后自动启动','仅为当前 Windows 账户设置'],
+    ['startMinimized','自启动时收至托盘','保留浮窗，不弹出主界面'],
+    ['closeToTray','关闭主窗口时收至托盘','从托盘选择“退出 ToZ”才会完全退出'],
     ['widgetVisible','显示桌面浮窗','在桌面查看今日与遗留待办'],
-    ['widgetPinned','浮窗始终置顶','显示在其他普通窗口上方']
+    ['widgetPinned','窗口始终置顶','仅控制浮窗窗口，不改变任务置顶']
   ].map(([key,title,note])=>`<div class="setting-row"><div><b>${title}</b><small>${note}</small></div><label class="native-switch"><input type="checkbox" data-preference="${key}" aria-label="${title}"><span></span></label></div>`).join('');
-  body.prepend(section);
+  dialog.querySelector('.browser-only-note')?.remove();
   dialog.querySelector('.reset-button')?.remove();
-  dialog.querySelector('.prototype-note').remove();
-  const actions=document.createElement('div');actions.className='native-actions';
-  actions.innerHTML='<button class="button secondary" data-native-action="desktop-shortcut">创建桌面快捷方式</button><button class="button secondary" data-native-action="open-data">打开数据目录</button><button class="button secondary" data-native-action="import">恢复 / 导入备份</button><button class="button secondary" data-native-action="click-through">浮窗鼠标穿透</button><button class="button secondary" data-native-action="quit">退出 ToZ</button>';
-  body.append(actions);
-  const info=document.createElement('div');info.className='native-info';info.innerHTML='数据仅保存在本机 SQLite 数据库。每日自动备份保留 14 天。<br>Ctrl+Alt+T 可显示浮窗并解除鼠标穿透。<div class="native-data-path" id="native-data-path"></div>';body.append(info);
+  dialog.querySelector('#native-window-actions').innerHTML='<button class="button secondary" data-native-action="desktop-shortcut">创建桌面快捷方式</button><button class="button secondary" data-native-action="click-through">开启鼠标穿透</button><button class="button secondary" data-native-action="recover-interaction">恢复浮窗交互</button>';
+  dialog.querySelector('#native-data-actions').innerHTML='<button class="button secondary" data-native-action="open-data">打开数据目录</button><button class="button secondary" data-native-action="import">恢复 / 导入备份…</button>';
+  dialog.querySelector('#native-about-actions').innerHTML='<button class="button secondary" data-native-action="quit">退出 ToZ</button>';
   section.addEventListener('change',async event=>{
     const input=event.target.closest('[data-preference]');if(!input)return;input.disabled=true;
-    try{await window.toz.configure({[input.dataset.preference]:input.checked});toast('设置已保存');}catch(error){input.checked=!input.checked;toast(error.message);}finally{input.disabled=false;await refreshDesktopSettings();}
+    try{await window.toz.configure({[input.dataset.preference]:input.checked});toast('设置已保存');}catch(error){toast(error.message);}finally{input.disabled=false;await refreshDesktopSettings();}
   });
-  actions.addEventListener('click',async event=>{
+  dialog.addEventListener('click',async event=>{
     const button=event.target.closest('[data-native-action]');if(!button)return;
-    try{const result=await window.toz.command(button.dataset.nativeAction,button.dataset.nativeAction==='click-through'?true:undefined);if(result===true)toast(button.dataset.nativeAction==='click-through'?'已开启鼠标穿透，Ctrl+Alt+T 可恢复':'操作已完成');}catch(error){toast(error.message);}
+    try{const action=button.dataset.nativeAction,result=await window.toz.command(action==='recover-interaction'?'click-through':action,action==='click-through'?true:action==='recover-interaction'?false:undefined);if(result===true)toast(action==='click-through'?'已开启鼠标穿透，Ctrl+Alt+T 或托盘可恢复':action==='recover-interaction'?'已恢复浮窗交互':'操作已完成');await refreshDesktopSettings();}catch(error){toast(error.message);}
   });
 }
 export async function refreshDesktopSettings(){
   if(!window.toz)return;
   const settings=await window.toz.settings();
   document.querySelectorAll('[data-preference]').forEach(input=>{input.checked=!!settings[input.dataset.preference];});
-  document.querySelector('#native-data-path').textContent=`版本 ${settings.version} · ${settings.dataPath}${settings.autoLaunch&&!settings.startupEnabled?' · 自启动已被 Windows 系统禁用，请在任务管理器中启用':''}`;
+  document.querySelector('#native-data-path').textContent=settings.dataPath;
+  document.querySelector('#native-version').textContent=`ToZ ${settings.version} · Windows 离线客户端`;
+  document.querySelector('#startup-warning').textContent=settings.autoLaunch&&!settings.startupEnabled?'自启动已被 Windows 禁用，请在任务管理器的“启动应用”中启用 ToZ。':'';
   return settings;
 }
