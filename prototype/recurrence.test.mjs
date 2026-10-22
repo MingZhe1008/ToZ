@@ -5,6 +5,15 @@ import {createSeries,occurrenceDates,materializeSeries,stopSeries,validateSeries
 import {eventTone} from './task-events.mjs';
 const series=(start,rule,until=null)=>createSeries(createTask('周期验证',start,'ToZ','独立记录',start),rule,until);
 
+test('计划起止定义每期固定日差，重复结束只限制执行日，最后一期可在截止后完成',()=>{
+  const s=createSeries(createTask('每月22日','2026-11-04','ToZ','','2026-10-22'),{unit:'month',interval:1},'2026-11-30');
+  assert.equal(s.span,13);
+  const tasks=materializeSeries([s],[],'2027-01-31');
+  assert.deepEqual(tasks.map(t=>[t.planStart,t.plan]),[['2026-10-22','2026-11-04'],['2026-11-22','2026-12-05']]);
+  s.rule.monthEnd=true;
+  assert.deepEqual(materializeSeries([s],[],'2027-01-31').map(t=>[t.planStart,t.plan]),[['2026-10-31','2026-11-13'],['2026-11-30','2026-12-13']]);
+});
+
 test('即将到来每组只保留最近计划开始的一期，不受输入、置顶或长完成区间影响',()=>{
   const s=createSeries(createTask('月底','2027-07-31','ToZ','','2026-10-31'),{unit:'month',interval:1,monthEnd:true});
   const tasks=materializeSeries([s],[],'2027-02-28','2026-10-22').reverse();
