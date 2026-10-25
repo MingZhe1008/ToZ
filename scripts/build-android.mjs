@@ -9,7 +9,7 @@ if(!fs.existsSync(path.join(sdk,'platforms/android-36/android.jar')))throw new E
 const result=spawnSync(process.platform==='win32'?'cmd.exe':'sh',process.platform==='win32'?['/d','/s','/c','gradlew.bat :app:assembleDebug --console=plain']:['./gradlew',':app:assembleDebug','--console=plain'],{cwd:path.join(root,'android'),stdio:'inherit',env:{...process.env,ANDROID_HOME:sdk}});
 if(result.error)throw result.error;
 if(result.status!==0)process.exit(result.status||1);
-const output=path.join(root,'dist/ToZ-1.1.5-android.1-debug.apk');
+const output=path.join(root,'dist/ToZ-1.1.5-android.2-debug.apk');
 fs.mkdirSync(path.dirname(output),{recursive:true});
 fs.copyFileSync(path.join(root,'android/app/build/outputs/apk/debug/app-debug.apk'),output);
 console.log('Android APK:',output);

@@ -42,7 +42,7 @@ window.toz={
   read:()=>guarded(()=>{ready();return {snapshot:store.snapshot()};}),
   commit:(input,version)=>guarded(()=>{ready();if(cloud.busyWrite)throw new Error('正在应用同步，请稍后保存');const snapshot=store.commit(input,version);emit('cloud',cloud.status());return {snapshot,backupError:store.backupError};}),
   purge:(input,version)=>guarded(()=>{ready();if(cloud.busyWrite)throw new Error('正在同步，请稍后删除');return store.purge(input,version);}),
-  settings:async()=>{ready();return {...store.settings(),version:'1.1.5-android.1',dataPath:'应用私有 SQLite（按账号隔离）'};},
+  settings:async()=>{ready();return {...store.settings(),version:'1.1.5-android.2',dataPath:'应用私有 SQLite（按账号隔离）'};},
   configure:async patch=>{ready();const result=store.updateSettings(patch);broadcast();return result;},
   cloudStatus:()=>cloud?.status()||{user:null,error:startupError?.message},
   cloud:async(action,args={})=>{
