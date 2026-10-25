@@ -6,7 +6,8 @@ const {createStartup}=require('./startup.cjs');
 const {resizeWidgetHeight}=require('./widget-size.cjs');
 const {widgetMenuTemplate}=require('./widget-menu.cjs');
 const APP_ID='com.toz.desktop';
-const cloudReview=process.argv.includes('--cloud-ui-test');
+const entryReview=process.argv.includes('--entry-ui-test');
+const cloudReview=process.argv.includes('--cloud-ui-test')||entryReview;
 const systemReview=process.argv.includes('--ui-system-test');
 const uiReview=process.argv.includes('--ui-v1-test')||systemReview||cloudReview;
 const smoke=process.argv.includes('--smoke-test')||uiReview;
@@ -14,7 +15,7 @@ const dataArg=process.argv.find(a=>a.startsWith('--toz-data='));
 if(uiReview&&(!dataArg||!path.resolve(dataArg.slice(11)).startsWith(path.resolve('.runtime')+path.sep)))throw new Error('界面定向验收必须使用工作目录 .runtime 下的独立数据目录');
 if(dataArg)app.setPath('userData',path.resolve(dataArg.slice(11)));
 app.setName('ToZ');app.setAppUserModelId(APP_ID);
-let mainWindow,widgetWindow,quickAddWindow,settingsWindow,tray,store,startup,cloud,quitting=false,widgetIgnore=false;
+let mainWindow,widgetWindow,quickAddWindow,settingsWindow,entryWindow,tray,store,startup,cloud,quitting=false,widgetIgnore=false,workspaceReady=false;
 const rendererReports=new Map();
 const miniSamples=new Set();
 const iconPath=path.join(__dirname,'..','build','icon.png');
@@ -25,11 +26,31 @@ if(!lock){app.quit();}else{
   app.whenReady().then(start).catch(error=>{if(smokeResult)fs.writeFileSync(smokeResult,JSON.stringify({ok:false,error:error.stack}));else dialog.showErrorBox('ToZ 启动失败',error.message);app.exit(1);});
 }
 function startupState(){return startup.state();}
-function showMain(command){if(!mainWindow)return;if(mainWindow.isMinimized())mainWindow.restore();mainWindow.show();mainWindow.focus();if(command)mainWindow.webContents.send('toz:ui-command',command);}
+function showMain(command){if(!workspaceReady){openEntryWindow().catch(error=>dialog.showErrorBox('ToZ',error.message));return;}if(!mainWindow)return;if(mainWindow.isMinimized())mainWindow.restore();mainWindow.show();mainWindow.focus();if(command)mainWindow.webContents.send('toz:ui-command',command);}
 function titleBarTheme(dark){return {color:dark?'#252527':'#f8f8f7',symbolColor:dark?'#f0f0f2':'#252527',height:38};}
-function applyTheme(){const dark=store.snapshot().dark;for(const window of [mainWindow,quickAddWindow,settingsWindow])if(window&&!window.isDestroyed()){window.setBackgroundColor(dark?'#29292c':'#ffffff');window.setTitleBarOverlay(titleBarTheme(dark));}}
+function applyTheme(){const dark=store.snapshot().dark;for(const window of [mainWindow,quickAddWindow,settingsWindow,entryWindow])if(window&&!window.isDestroyed()){window.setBackgroundColor(dark?'#29292c':'#ffffff');window.setTitleBarOverlay(titleBarTheme(dark));}}
 function broadcast(){applyTheme();const snapshot=store.snapshot();for(const w of [mainWindow,widgetWindow,quickAddWindow,settingsWindow])if(w&&!w.isDestroyed())w.webContents.send('toz:state',snapshot);}
 function secure(window){window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('file:'))event.preventDefault();});}
+async function openEntryWindow(){
+  if(entryWindow&&!entryWindow.isDestroyed()){entryWindow.show();entryWindow.focus();return;}
+  const dark=store.snapshot().dark,area=screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  const window=new BrowserWindow({width:Math.min(940,area.width),height:Math.min(680,area.height),minWidth:640,minHeight:540,title:'欢迎使用 ToZ',titleBarStyle:'hidden',titleBarOverlay:titleBarTheme(dark),backgroundColor:dark?'#29292c':'#ffffff',show:false,autoHideMenuBar:true,icon:iconPath,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,additionalArguments:['--toz-entry',...(smoke?['--toz-smoke']:[])]}});
+  entryWindow=window;secure(window);
+  window.on('closed',()=>{if(entryWindow===window)entryWindow=null;if(!workspaceReady&&!quitting)app.quit();});
+  try{await window.loadFile(path.join(__dirname,'..','prototype','entry.html'));if(!window.isDestroyed()){window.show();window.focus();}}catch(error){window.destroy();throw error;}
+}
+function enterWorkspace(show=true){
+  if(workspaceReady)return;
+  workspaceReady=true;
+  if(!mainWindow){createWindows();if(show)mainWindow.once('ready-to-show',()=>showMain());}
+  else if(show){showMain();applyWidget();}
+  if(entryWindow){entryWindow.destroy();entryWindow=null;}
+  if(!smoke&&!tray){tray=new Tray(nativeImage.createFromPath(iconPath).resize({width:20,height:20}));tray.setToolTip('ToZ · 离线待办');tray.on('double-click',()=>showMain());rebuildTray();globalShortcut.register('CommandOrControl+Alt+T',()=>{if(!workspaceReady){showMain();return;}setIgnore(false);store.updateSettings({widgetVisible:true});applyWidget();});}
+}
+async function returnToEntry(){
+  workspaceReady=false;for(const window of [mainWindow,widgetWindow,settingsWindow,quickAddWindow])if(window&&!window.isDestroyed())window.hide();
+  await openEntryWindow();
+}
 function fitBounds(bounds,fallback){
   const displays=screen.getAllDisplays();
   if(bounds&&Number.isFinite(bounds.x)&&Number.isFinite(bounds.y)&&displays.some(({workArea:a})=>bounds.x+60>a.x&&bounds.x<a.x+a.width-60&&bounds.y+40>a.y&&bounds.y<a.y+a.height-40)){
@@ -60,6 +81,7 @@ function createWindows(){
   screen.on('display-removed',()=>{for(const w of [mainWindow,widgetWindow]){const bounds=w.getBounds(),fit=fitBounds(bounds,{...bounds,x:screen.getPrimaryDisplay().workArea.x+40,y:screen.getPrimaryDisplay().workArea.y+40});w.setBounds(fit);}});
 }
 async function openQuickAdd(date){
+  if(!workspaceReady)return openEntryWindow();
   if(quickAddWindow&&!quickAddWindow.isDestroyed()){
     if(quickAddWindow.isMinimized())quickAddWindow.restore();
     quickAddWindow.show();quickAddWindow.focus();return true;
@@ -78,6 +100,7 @@ async function openQuickAdd(date){
   return true;
 }
 async function openSettingsWindow(tab='appearance'){
+  if(!workspaceReady)return openEntryWindow();
   const selected=['appearance','startup','data','account','about'].includes(tab)?tab:'appearance';
   if(settingsWindow&&!settingsWindow.isDestroyed()){
     const existing=settingsWindow;
@@ -94,7 +117,7 @@ async function openSettingsWindow(tab='appearance'){
   try{await window.loadFile(path.join(__dirname,'..','prototype','index.html'),{query:{tab:selected}});}catch(error){if(!window.isDestroyed())window.destroy();throw error;}
   if(!window.isDestroyed()){window.setTitle('ToZ 设置');window.show();window.focus();}return true;
 }
-function applyWidget(){const settings=store.settings();widgetWindow.setAlwaysOnTop(settings.widgetPinned);if(!smoke){if(settings.widgetVisible)widgetWindow.showInactive();else widgetWindow.hide();}if(settings.widgetCollapsed)resizeWidgetHeight(widgetWindow,68);}
+function applyWidget(){if(!widgetWindow)return;if(!workspaceReady){widgetWindow.hide();return;}const settings=store.settings();widgetWindow.setAlwaysOnTop(settings.widgetPinned);if(!smoke){if(settings.widgetVisible)widgetWindow.showInactive();else widgetWindow.hide();}if(settings.widgetCollapsed)resizeWidgetHeight(widgetWindow,68);}
 function rebuildTray(){if(!tray)return;const settings=store.settings();tray.setContextMenu(Menu.buildFromTemplate([
   {label:'打开 ToZ',click:()=>showMain()},
   {label:settings.widgetVisible?'隐藏桌面浮窗':'显示桌面浮窗',click:()=>{store.updateSettings({widgetVisible:!settings.widgetVisible});applyWidget();rebuildTray();broadcast();}},
@@ -104,14 +127,14 @@ function rebuildTray(){if(!tray)return;const settings=store.settings();tray.setC
   {type:'separator'},{label:'退出 ToZ',click:()=>app.quit()}
 ]));}
 function setIgnore(value){widgetIgnore=value;widgetWindow.setIgnoreMouseEvents(value,{forward:true});rebuildTray();}
-function toggleWidget(){const visible=!store.settings().widgetVisible;store.updateSettings({widgetVisible:visible});if(visible)setIgnore(false);applyWidget();if(visible){widgetWindow.showInactive();widgetWindow.moveTop();}rebuildTray();broadcast();return visible;}
+function toggleWidget(){if(!workspaceReady){showMain();return false;}const visible=!store.settings().widgetVisible;store.updateSettings({widgetVisible:visible});if(visible)setIgnore(false);applyWidget();if(visible){widgetWindow.showInactive();widgetWindow.moveTop();}rebuildTray();broadcast();return visible;}
 function setWidgetCollapsed(value){
   if(value&&widgetWindow.getContentSize()[1]>100)store.setMeta('widgetExpandedHeight',widgetWindow.getContentSize()[1]);
   store.updateSettings({widgetCollapsed:!!value});
   resizeWidgetHeight(widgetWindow,value?68:store.meta('widgetExpandedHeight',550));broadcast();
 }
-function trusted(event){return [mainWindow,widgetWindow,quickAddWindow,settingsWindow].some(w=>w&&!w.isDestroyed()&&w.webContents===event.sender);}
-function editable(){if(cloud?.busyWrite)throw new Error('正在保存同步结果，请稍后重试');}
+function trusted(event){return [mainWindow,widgetWindow,quickAddWindow,settingsWindow,entryWindow].some(w=>w&&!w.isDestroyed()&&w.webContents===event.sender);}
+function editable(){if(!workspaceReady)throw new Error('请先登录账号或选择离线使用');if(cloud?.busyWrite)throw new Error('正在保存同步结果，请稍后重试');}
 function switchProfile(id,importLocal){
   const directory=id?path.join(app.getPath('userData'),'accounts',require('node:crypto').createHash('sha256').update(id).digest('hex')):app.getPath('userData');
   const old=store,current=old.snapshot(),next=new Store(directory);
@@ -131,6 +154,13 @@ function handlers(){
     try{if(!trusted(event))throw new Error('无效窗口');editable();const saved=store.commit(snapshot,version);event.returnValue={ok:true,snapshot:saved,backupError:store.backupError};broadcast();}catch(error){event.returnValue={ok:false,error:error.message,snapshot:store.snapshot()};}
   });
   const handle=(channel,fn)=>ipcMain.handle(channel,async(event,...args)=>{if(!trusted(event))throw new Error('无效窗口');return fn(...args);});
+  handle('toz:entry',action=>{
+    if(!['offline','account'].includes(action))throw new Error('未知启动操作');
+    if(cloud?.authBusy)throw new Error('账号操作进行中，请稍后重试');
+    if(action==='account'&&!cloud?.user)throw new Error('请先登录账号');
+    if(action==='offline'&&cloud?.user)throw new Error('当前已有登录账号，请进入账号工作台');
+    setImmediate(()=>enterWorkspace());return {ok:true};
+  });
   ipcMain.on('toz:purge',(event,{request,version})=>{
     try{if(!trusted(event))throw new Error('无效窗口');editable();const result=store.purge(request,version);event.returnValue={ok:true,...result};broadcast();}catch(error){event.returnValue={ok:false,error:error.message,snapshot:store.snapshot()};}
   });
@@ -144,9 +174,9 @@ function handlers(){
     if(action==='status')return cloud.status();
     if(action==='code')return cloud.code(arg.email,arg.purpose);
     if(action==='bind')return await cloud.bind(arg.email,arg.code);
-    if(action==='logout')return await cloud.logout();
+    if(action==='logout'){const result=await cloud.logout();if(!smoke||entryReview)await returnToEntry();return result;}
     if(action==='sync')return cloud.sync();
-    const owner=BrowserWindow.getFocusedWindow()||mainWindow;
+    const owner=BrowserWindow.getFocusedWindow()||entryWindow||mainWindow;
     if(action==='login'){
       let importLocal=false;
       if(store.snapshot().tasks.length||store.snapshot().recurrences.length){
@@ -232,14 +262,14 @@ async function start(){
   app.on('will-quit',()=>clearInterval(cloudTimer));
   app.on('will-quit',()=>clearInterval(recurrenceTimer));
   startup=createStartup(app);
-  Menu.setApplicationMenu(null);handlers();createWindows();
+  Menu.setApplicationMenu(null);handlers();
+  if((!smoke||entryReview)&&!cloud?.user)await openEntryWindow();else enterWorkspace(false);
   if(cloud?.user)cloud.sync();
-  if(!smoke){tray=new Tray(nativeImage.createFromPath(iconPath).resize({width:20,height:20}));tray.setToolTip('ToZ · 离线待办');tray.on('double-click',()=>showMain());rebuildTray();globalShortcut.register('CommandOrControl+Alt+T',()=>{setIgnore(false);store.updateSettings({widgetVisible:true});applyWidget();});}
   app.on('before-quit',()=>{quitting=true;});
   app.on('will-quit',()=>{globalShortcut.unregisterAll();store.close();});
   if(cloudReview){
     try{
-      const result=await require('./cloud-ui-smoke.cjs')({openSettingsWindow,getSettings:()=>settingsWindow,getStore:()=>store,cloud,cloudTestEnv,outputDirectory:path.dirname(smokeResult||'artifacts/cloud-ui/result.json')});
+      const result=entryReview?await require('./entry-ui-smoke.cjs')({getEntry:()=>entryWindow,getMain:()=>mainWindow,getWidget:()=>widgetWindow,getStore:()=>store,returnToEntry,cloud,cloudTestEnv,outputDirectory:path.dirname(smokeResult||'artifacts/entry-ui/result.json')}):await require('./cloud-ui-smoke.cjs')({openSettingsWindow,getSettings:()=>settingsWindow,getStore:()=>store,cloud,cloudTestEnv,outputDirectory:path.dirname(smokeResult||'artifacts/cloud-ui/result.json')});
       const resultPath=smokeResult||'artifacts/cloud-ui/result.json';fs.mkdirSync(path.dirname(resultPath),{recursive:true});fs.writeFileSync(resultPath,JSON.stringify(result,null,2));
       cloudTestEnv.service.server.closeAllConnections();await new Promise(resolve=>cloudTestEnv.service.server.close(resolve));cloudTestEnv.service.close();app.exit(result.ok?0:1);
     }catch(error){console.error(error);app.exit(1);}return;
