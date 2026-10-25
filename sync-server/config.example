@@ -1,0 +1,9 @@
+# Copy to /etc/toz-sync/server.env (root-only permissions). Never commit real values.
+HOST=127.0.0.1
+PORT=8787
+DATA_DIR=/var/lib/toz-sync
+TRUST_PROXY=1
+SMTP_HOST=smtp.qq.com
+SMTP_USER=your-sender@qq.com
+SMTP_PASS=replace-with-smtp-authorization-code
+OTP_SECRET=replace-with-a-random-secret-of-at-least-32-characters

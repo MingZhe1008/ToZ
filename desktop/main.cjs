@@ -1,4 +1,4 @@
-const {app,BrowserWindow,ipcMain,Tray,Menu,nativeImage,screen,dialog,shell,globalShortcut} = require('electron');
+const {app,BrowserWindow,ipcMain,Tray,Menu,nativeImage,screen,dialog,shell,globalShortcut,safeStorage} = require('electron');
 const fs=require('node:fs');
 const path=require('node:path');
 const {Store}=require('./store.cjs');
@@ -6,14 +6,15 @@ const {createStartup}=require('./startup.cjs');
 const {resizeWidgetHeight}=require('./widget-size.cjs');
 const {widgetMenuTemplate}=require('./widget-menu.cjs');
 const APP_ID='com.toz.desktop';
+const cloudReview=process.argv.includes('--cloud-ui-test');
 const systemReview=process.argv.includes('--ui-system-test');
-const uiReview=process.argv.includes('--ui-v1-test')||systemReview;
+const uiReview=process.argv.includes('--ui-v1-test')||systemReview||cloudReview;
 const smoke=process.argv.includes('--smoke-test')||uiReview;
 const dataArg=process.argv.find(a=>a.startsWith('--toz-data='));
 if(uiReview&&(!dataArg||!path.resolve(dataArg.slice(11)).startsWith(path.resolve('.runtime')+path.sep)))throw new Error('界面定向验收必须使用工作目录 .runtime 下的独立数据目录');
 if(dataArg)app.setPath('userData',path.resolve(dataArg.slice(11)));
 app.setName('ToZ');app.setAppUserModelId(APP_ID);
-let mainWindow,widgetWindow,quickAddWindow,settingsWindow,tray,store,startup,quitting=false,widgetIgnore=false;
+let mainWindow,widgetWindow,quickAddWindow,settingsWindow,tray,store,startup,cloud,quitting=false,widgetIgnore=false;
 const rendererReports=new Map();
 const miniSamples=new Set();
 const iconPath=path.join(__dirname,'..','build','icon.png');
@@ -77,7 +78,7 @@ async function openQuickAdd(date){
   return true;
 }
 async function openSettingsWindow(tab='appearance'){
-  const selected=['appearance','startup','data','about'].includes(tab)?tab:'appearance';
+  const selected=['appearance','startup','data','account','about'].includes(tab)?tab:'appearance';
   if(settingsWindow&&!settingsWindow.isDestroyed()){
     const existing=settingsWindow;
     if(existing.webContents.isLoading())await new Promise(resolve=>{existing.webContents.once('did-finish-load',resolve);existing.once('closed',resolve);});
@@ -110,17 +111,60 @@ function setWidgetCollapsed(value){
   resizeWidgetHeight(widgetWindow,value?68:store.meta('widgetExpandedHeight',550));broadcast();
 }
 function trusted(event){return [mainWindow,widgetWindow,quickAddWindow,settingsWindow].some(w=>w&&!w.isDestroyed()&&w.webContents===event.sender);}
+function editable(){if(cloud?.busyWrite)throw new Error('正在保存同步结果，请稍后重试');}
+function switchProfile(id,importLocal){
+  const directory=id?path.join(app.getPath('userData'),'accounts',require('node:crypto').createHash('sha256').update(id).digest('hex')):app.getPath('userData');
+  const old=store,current=old.snapshot(),next=new Store(directory);
+  try{
+    if(id&&importLocal&&next.snapshot().version===0)next.restore(current);
+    next.setMeta('settings',current.settings);next.setMeta('dark',current.dark);next.setMeta('opacity',current.opacity);
+    next.setMeta('version',Math.max(next.snapshot().version,current.version)+1);
+  }catch(error){next.close();throw error;}
+  store=next;old.close();
+  quickAddWindow?.close();
+  for(const w of [mainWindow,widgetWindow,quickAddWindow,settingsWindow])if(w&&!w.isDestroyed())w.webContents.send('toz:profile');
+  if(mainWindow)broadcast();
+}
 function handlers(){
   ipcMain.on('toz:read',event=>{event.returnValue=trusted(event)?{ok:true,snapshot:store.snapshot()}:{ok:false,error:'无效窗口'};});
   ipcMain.on('toz:commit',(event,{snapshot,version})=>{
-    try{if(!trusted(event))throw new Error('无效窗口');const saved=store.commit(snapshot,version);event.returnValue={ok:true,snapshot:saved,backupError:store.backupError};broadcast();}catch(error){event.returnValue={ok:false,error:error.message,snapshot:store.snapshot()};}
+    try{if(!trusted(event))throw new Error('无效窗口');editable();const saved=store.commit(snapshot,version);event.returnValue={ok:true,snapshot:saved,backupError:store.backupError};broadcast();}catch(error){event.returnValue={ok:false,error:error.message,snapshot:store.snapshot()};}
   });
   const handle=(channel,fn)=>ipcMain.handle(channel,async(event,...args)=>{if(!trusted(event))throw new Error('无效窗口');return fn(...args);});
   ipcMain.on('toz:purge',(event,{request,version})=>{
-    try{if(!trusted(event))throw new Error('无效窗口');const result=store.purge(request,version);event.returnValue={ok:true,...result};broadcast();}catch(error){event.returnValue={ok:false,error:error.message,snapshot:store.snapshot()};}
+    try{if(!trusted(event))throw new Error('无效窗口');editable();const result=store.purge(request,version);event.returnValue={ok:true,...result};broadcast();}catch(error){event.returnValue={ok:false,error:error.message,snapshot:store.snapshot()};}
+  });
+  handle('toz:cloud',async(action,arg={})=>{
+    if(!cloud)throw new Error('云同步不可用');
+    if(!['status','code','login','logout','sync','bind','resolve'].includes(action))throw new Error('未知账号操作');
+    const mutation=['login','bind','logout'].includes(action);
+    if(mutation&&cloud.authBusy)throw new Error('账号操作进行中，请稍后重试');
+    if(mutation)cloud.authBusy=true;
+    try{
+    if(action==='status')return cloud.status();
+    if(action==='code')return cloud.code(arg.email,arg.purpose);
+    if(action==='bind')return await cloud.bind(arg.email,arg.code);
+    if(action==='logout')return await cloud.logout();
+    if(action==='sync')return cloud.sync();
+    const owner=BrowserWindow.getFocusedWindow()||mainWindow;
+    if(action==='login'){
+      let importLocal=false;
+      if(store.snapshot().tasks.length||store.snapshot().recurrences.length){
+        const result=await dialog.showMessageBox(owner,{type:'question',buttons:['取消','保留在本机，进入账号','复制到账号并同步'],defaultId:0,cancelId:0,title:'首次登录的数据处理',message:'如何处理当前离线数据？',detail:'账号数据独立保存。复制仅在该账号首次建立本地副本时执行；原离线数据保留，退出账号后可继续查看。'});
+        if(result.response===0)return cloud.status();importLocal=result.response===2;
+      }
+      return await cloud.login(arg.email,arg.code,importLocal);
+    }
+    if(!['local','cloud'].includes(arg.choice))throw new Error('无效冲突选择');
+    const confirmedConflict=structuredClone(cloud.conflict);
+    const result=await dialog.showMessageBox(owner,{type:'warning',buttons:['取消','确认处理冲突'],defaultId:0,cancelId:0,title:'解决同步冲突',message:arg.choice==='local'?'冲突项保留此电脑版本？':'冲突项保留云端版本？',detail:'不同任务的修改仍会自动合并。涉及分区、周期或父子关联时，可能需要采用完整版本。替换本机数据前保存安全副本，云端保留最近 30 个旧版本。'});
+    if(result.response===1&&!require('node:util').isDeepStrictEqual(confirmedConflict,cloud.conflict))throw new Error('冲突数据已变化，请重新确认');
+    return result.response===1?cloud.sync(arg.choice):cloud.status();
+    }finally{if(mutation){cloud.authBusy=false;broadcast();if(cloud.user)cloud.sync();}}
   });
   handle('toz:settings',()=>({...store.settings(),...startupState(),dataPath:store.directory,version:app.getVersion(),packaged:app.isPackaged,clickThrough:widgetIgnore}));
   handle('toz:configure',patch=>{
+    editable();
     if(!patch||typeof patch!=='object')throw new Error('无效设置');
     const {autoLaunch,...rest}=patch;
     if(autoLaunch!==undefined){if(!app.isPackaged&&!smoke)throw new Error('请在安装版中设置开机自启动');startup.set(autoLaunch);}
@@ -161,13 +205,14 @@ function handlers(){
         const snapshot=store.snapshot();if(arg?.taskId){snapshot.tasks=snapshot.tasks.filter(t=>t.id===arg.taskId);snapshot.preferences.taskOrder=snapshot.tasks.map(t=>t.id);snapshot.recurrences=snapshot.recurrences.filter(s=>snapshot.tasks.some(t=>t.repeatId===s.id)).map(s=>({...s,active:false}));}fs.writeFileSync(choice.filePath,JSON.stringify({...snapshot,settings:store.settings(),exportedAt:new Date().toISOString()},null,2));return true;
       }
       case 'import':{
+        const importStore=store;
         const choice=await dialog.showOpenDialog(owner,{title:'恢复 ToZ / 导入原型数据',filters:[{name:'ToZ 备份',extensions:['json']}],properties:['openFile']});
         if(choice.canceled)return false;
         const filename=choice.filePaths[0];if(fs.statSync(filename).size>50*1024*1024)throw new Error('备份超过 50 MB');
         const snapshot=JSON.parse(fs.readFileSync(filename,'utf8'));
         const {validateSnapshot}=require('./store.cjs');if(snapshot.schema!==1)throw new Error('不支持此备份版本');validateSnapshot(snapshot);
         const confirm=await dialog.showMessageBox(owner,{type:'question',buttons:['取消','恢复数据'],defaultId:0,cancelId:0,title:'恢复数据',message:`恢复 ${snapshot.tasks.length} 项任务及其全部历史？`,detail:'将替换当前任务。恢复前会自动保存一份当前数据的安全副本。系统自启动等本机设置保持不变。'});
-        if(confirm.response!==1)return false;store.restore(snapshot);broadcast();return true;
+        if(confirm.response!==1)return false;if(store!==importStore)throw new Error('账号已切换，请重新选择要恢复的副本');editable();store.restore(snapshot);broadcast();return true;
       }
       default:throw new Error('未知操作');
     }
@@ -175,13 +220,30 @@ function handlers(){
 }
 async function start(){
   store=new Store(app.getPath('userData'));store.ensureRecurring();
-  const recurrenceTimer=setInterval(()=>{try{if(store.ensureRecurring())broadcast();}catch(error){console.error('周期排期：'+error.message);}},30000);
+  let cloudTestEnv;
+  if(cloudReview){
+    const mail=new Map(),service=require('../sync-server/server.cjs').createService({directory:path.join(app.getPath('userData'),'test-server'),pepper:'isolated-cloud-ui-test-secret-000000',sendMail:async(email,code)=>mail.set(email,code)});
+    await new Promise(resolve=>service.server.listen(0,'127.0.0.1',resolve));
+    cloudTestEnv={mail,service,url:'http://127.0.0.1:'+service.server.address().port};
+  }
+  if(!smoke||cloudReview)cloud=new (require('./cloud.cjs').Cloud)({directory:app.getPath('userData'),getStore:()=>store,switchProfile,url:cloudTestEnv?.url,seal:token=>{if(!safeStorage.isEncryptionAvailable())throw new Error('Windows 凭据加密不可用');return safeStorage.encryptString(token).toString('base64');},unseal:token=>safeStorage.decryptString(Buffer.from(token,'base64')),notify:()=>{if(mainWindow)broadcast();}});
+  const recurrenceTimer=setInterval(()=>{try{if(!cloud?.busyWrite&&store.ensureRecurring())broadcast();}catch(error){console.error('周期排期：'+error.message);}},30000);
+  const cloudTimer=setInterval(()=>{if(!quitting)cloud?.sync();},15000);
+  app.on('will-quit',()=>clearInterval(cloudTimer));
   app.on('will-quit',()=>clearInterval(recurrenceTimer));
   startup=createStartup(app);
   Menu.setApplicationMenu(null);handlers();createWindows();
+  if(cloud?.user)cloud.sync();
   if(!smoke){tray=new Tray(nativeImage.createFromPath(iconPath).resize({width:20,height:20}));tray.setToolTip('ToZ · 离线待办');tray.on('double-click',()=>showMain());rebuildTray();globalShortcut.register('CommandOrControl+Alt+T',()=>{setIgnore(false);store.updateSettings({widgetVisible:true});applyWidget();});}
   app.on('before-quit',()=>{quitting=true;});
   app.on('will-quit',()=>{globalShortcut.unregisterAll();store.close();});
+  if(cloudReview){
+    try{
+      const result=await require('./cloud-ui-smoke.cjs')({openSettingsWindow,getSettings:()=>settingsWindow,getStore:()=>store,cloud,cloudTestEnv,outputDirectory:path.dirname(smokeResult||'artifacts/cloud-ui/result.json')});
+      const resultPath=smokeResult||'artifacts/cloud-ui/result.json';fs.mkdirSync(path.dirname(resultPath),{recursive:true});fs.writeFileSync(resultPath,JSON.stringify(result,null,2));
+      cloudTestEnv.service.server.closeAllConnections();await new Promise(resolve=>cloudTestEnv.service.server.close(resolve));cloudTestEnv.service.close();app.exit(result.ok?0:1);
+    }catch(error){console.error(error);app.exit(1);}return;
+  }
   if(uiReview){
     const resultPath=path.resolve(smokeResult||'artifacts/ui-v1/result.json');fs.mkdirSync(path.dirname(resultPath),{recursive:true});
     try{

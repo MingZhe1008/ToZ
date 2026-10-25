@@ -80,3 +80,14 @@ dialog,[data-theme=dark] dialog{background:var(--paper);color:var(--ink);border-
 /* Match the three command labels to the titlebar widget toggle. */
 .desktop-main .application-menubar button:not(:first-child),.desktop-main .desktop-titlebar>button[data-action="toggle-widget"]{font-family:inherit;font-size:11px;font-weight:400;line-height:normal;color:var(--muted)}
 .desktop-main .application-menubar button:not(:first-child):hover,.desktop-main .application-menubar button:not(:first-child)[aria-expanded=true]{color:var(--accent)}
+/* Account forms follow the existing quiet, neutral settings layout. */
+.cloud-form{display:grid;gap:16px;margin:20px 0;max-width:440px}
+.cloud-form label{display:grid;gap:8px;font-size:13px;margin:0}
+.cloud-form input{width:100%;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:inherit;font:inherit}
+.cloud-code-row{display:flex;align-items:end;gap:12px}
+.cloud-code-row label{flex:1;min-width:0}
+.cloud-code-row button{min-height:40px;white-space:nowrap}
+.cloud-binding{margin-top:24px}.cloud-binding summary{cursor:pointer;font-size:13px}
+#cloud-conflict{padding:18px;margin-top:20px}#cloud-conflict p{font-size:13px;line-height:1.6}
+#cloud-status-dot{font-size:20px;color:var(--muted,#94949b)}
+#cloud-controls [hidden]{display:none!important}

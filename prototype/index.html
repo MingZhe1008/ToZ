@@ -22,7 +22,7 @@
   <header class="studio-bar">
     <a class="wordmark" href="#" aria-label="ToZ 首页"><span class="brand-mark">t<span>z</span></span><span>ToZ<small>让开始有迹可循</small></span></a>
     <nav class="view-switch" aria-label="预览方式"><button data-mode="both" aria-pressed="true">并排预览</button><button data-mode="client" aria-pressed="false">客户端</button><button data-mode="widget" aria-pressed="false">桌面浮窗</button></nav>
-    <div class="studio-meta"><span class="live-dot"></span> 交互原型 <span class="version">v1.0.0</span><button class="icon-button" data-action="guide" aria-label="查看原型说明" title="原型说明"><span data-icon="info"></span></button></div>
+    <div class="studio-meta"><span class="live-dot"></span> 交互原型 <span class="version">v1.1.0</span><button class="icon-button" data-action="guide" aria-label="查看原型说明" title="原型说明"><span data-icon="info"></span></button></div>
   </header>
 
   <main class="showcase" data-mode="both">
@@ -88,6 +88,7 @@
         <button id="tab-appearance" role="tab" data-settings-tab="appearance" aria-controls="settings-appearance" aria-selected="true"><span data-icon="sun"></span>外观与阅读</button>
         <button id="tab-startup" role="tab" data-settings-tab="startup" aria-controls="settings-startup" aria-selected="false" tabindex="-1"><span data-icon="layers"></span>启动与窗口</button>
         <button id="tab-data" role="tab" data-settings-tab="data" aria-controls="settings-data" aria-selected="false" tabindex="-1"><span data-icon="shield"></span>数据与备份</button>
+        <button id="tab-account" role="tab" data-settings-tab="account" aria-controls="settings-account" aria-selected="false" tabindex="-1"><span data-icon="history"></span>账号与同步</button>
         <button id="tab-about" role="tab" data-settings-tab="about" aria-controls="settings-about" aria-selected="false" tabindex="-1"><span data-icon="info"></span>关于</button>
       </nav>
       <div class="dialog-body">
@@ -100,13 +101,24 @@
           <p class="settings-section-label">文字预览</p><div class="setting-card reading-preview"><strong>今天，做好一件小事。</strong><p>完成 ToZ 桌面体验设计</p><small>10 月 22 日 · 持续 8 天 · 中文与数字自然对齐</small></div><p class="settings-footnote">使用系统界面字体，让中文与数字自然对齐。</p>
         </section>
         <section id="settings-startup" class="settings-panel" role="tabpanel" aria-labelledby="tab-startup" tabindex="0" hidden><h3>启动与窗口</h3><p class="settings-intro">按自己的节奏开始一天。</p><p class="browser-only-note">启动项、托盘与原生浮窗设置在 Windows 安装版中可用。浏览器仅提供外观与交互预览。</p><div id="native-settings" class="setting-card"></div><p id="startup-warning" class="form-error" role="status"></p><div id="native-window-actions" class="native-actions"></div><p class="settings-footnote">Ctrl+Alt+T 可显示浮窗并解除鼠标穿透。也可从托盘选择“解除鼠标穿透”。</p></section>
+        <section id="settings-account" class="settings-panel" role="tabpanel" aria-labelledby="tab-account" tabindex="0" hidden>
+          <h3>账号与同步</h3><p class="settings-intro">换一台电脑，接着做手头的事。</p>
+          <div id="cloud-offline-note" class="setting-card"><p>账号与云同步在 Windows 客户端中可用。</p></div>
+          <div id="cloud-controls" hidden>
+            <div class="setting-card"><div class="setting-row"><div><b id="cloud-account-name">尚未登录</b><small id="cloud-state" role="status" aria-live="polite">离线数据仍会自动保存在此电脑。</small></div><span id="cloud-status-dot" aria-hidden="true">○</span></div></div>
+            <form id="cloud-login-form" class="cloud-form"><label>登录邮箱<input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="你的邮箱地址"></label><div class="cloud-code-row"><label>验证码<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required placeholder="6 位数字"></label><button type="button" class="button secondary" data-cloud-code="login">获取验证码</button></div><button type="submit" class="button primary">登录 / 注册</button><p class="settings-footnote">首次验证后自动创建账号，无需密码。已有离线数据可选择复制到账号，原数据保留。</p></form>
+            <div id="cloud-signed-in" hidden><div class="native-actions"><button type="button" class="button primary" id="cloud-sync-now">立即同步</button><button type="button" class="button secondary" id="cloud-logout">退出账号</button></div><p id="cloud-identities" class="settings-footnote"></p><details class="cloud-binding"><summary>绑定另一个邮箱</summary><form id="cloud-bind-form" class="cloud-form"><label>新邮箱<input name="email" type="email" autocomplete="email" maxlength="254" required></label><div class="cloud-code-row"><label>验证码<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label><button type="button" class="button secondary" data-cloud-code="bind">获取验证码</button></div><button type="submit" class="button secondary">验证并绑定</button></form></details><p class="settings-footnote">已绑定邮箱均可登录同一账号。手机号绑定待短信服务接入后开放。</p></div>
+            <div id="cloud-conflict" class="setting-card" hidden><b>有修改需要你决定</b><p id="cloud-conflict-list"></p><div class="native-actions"><button type="button" class="button secondary" data-cloud-resolve="local">冲突项保留此电脑版本</button><button type="button" class="button secondary" data-cloud-resolve="cloud">冲突项保留云端版本</button></div></div>
+            <p id="cloud-error" class="form-error" role="alert"></p><p class="settings-footnote">登录后每 15 秒自动同步。网络中断时继续本地保存，恢复连接后重试。窗口、启动项和阅读偏好仅在此电脑保存。</p>
+          </div>
+        </section>
         <section id="settings-data" class="settings-panel" role="tabpanel" aria-labelledby="tab-data" tabindex="0" hidden>
           <h3>数据与备份</h3><p class="settings-intro">看得见的数据位置，更踏实的本地体验。</p>
           <h4 class="settings-section-label">本地优先</h4><div class="setting-card"><div class="setting-row"><div><b>任务留在这台设备</b><small class="data-storage-description">浏览器原型使用当前浏览器的本地存储。</small></div><span data-icon="shield" class="settings-status-icon"></span></div><div class="setting-row"><div><b>自动备份</b><small class="data-backup-description">安装版每日最新快照保留最近十四份。</small></div><span class="settings-status-text">本地保存</span></div></div>
           <h4 class="settings-section-label">备份与恢复</h4><div class="setting-card"><div class="setting-row"><div><b>导出完整备份</b><small>任务、子任务与每一次调整</small></div><button class="button secondary" data-action="export">导出备份…</button></div><div id="native-data-actions"></div></div>
           <h4 class="settings-section-label">数据位置</h4><div class="setting-card"><div class="setting-row"><div class="settings-path-copy"><b>当前账户的数据目录</b><small id="native-data-path">保存在当前浏览器中，与 Windows 安装版独立。</small></div><button class="button secondary native-only" data-native-action="open-data">打开目录</button></div><div class="setting-row"><div><b>回收站</b><small>恢复已删除内容，或确认后彻底删除</small></div><button class="button secondary" data-action="trash">打开回收站</button></div></div><p class="settings-footnote">恢复前先另存安全副本，确认后替换任务。程序与任务分开保存，卸载默认保留数据。</p><button class="text-button reset-button" data-action="reset">恢复初始演示数据…</button>
         </section>
-        <section id="settings-about" class="settings-panel" role="tabpanel" aria-labelledby="tab-about" tabindex="0" hidden><div class="settings-about-brand"><span class="brand-mark small">t<span>z</span></span><b>ToZ</b></div><h3>让开始有迹可循。</h3><p id="native-version" class="settings-intro">ToZ 1.0.0 · 浏览器交互原型</p><p class="settings-footnote">计划可以调整，首次开始值得被记住。离线使用，不依赖账户或业务服务器。</p><div id="native-about-actions" class="native-actions"></div></section>
+        <section id="settings-about" class="settings-panel" role="tabpanel" aria-labelledby="tab-about" tabindex="0" hidden><div class="settings-about-brand"><span class="brand-mark small">t<span>z</span></span><b>ToZ</b></div><h3>让开始有迹可循。</h3><p id="native-version" class="settings-intro">ToZ 1.1.0 · 浏览器交互原型</p><p class="settings-footnote">计划可以调整，首次开始值得被记住。离线可用；Windows 客户端可登录邮箱账号，同步多台电脑。</p><div id="native-about-actions" class="native-actions"></div></section>
       </div>
     </div>
   </dialog>
@@ -119,5 +131,6 @@
   <dialog id="purge-dialog" aria-labelledby="purge-title"><form id="purge-form"><div class="dialog-top"><span class="dialog-eyebrow">此操作不可恢复</span><button type="button" class="icon-button" data-close aria-label="关闭"><span data-icon="close"></span></button></div><h2 id="purge-title">彻底删除</h2><p id="purge-description" class="purge-description"></p><div class="purge-note"><span data-icon="info"></span><p>删除后无法从回收站恢复。旧备份和已导出的文件不会随之删除。单独清除子任务时，父任务原有足迹会保留。</p></div><p class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button secondary" data-close autofocus>取消</button><button id="purge-confirm" type="submit" class="button secondary danger">彻底删除</button></div></form></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="./app.mjs"></script>
+  <script type="module" src="./cloud-ui.mjs"></script>
 </body>
 </html>
