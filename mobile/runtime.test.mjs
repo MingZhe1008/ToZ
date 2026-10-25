@@ -84,3 +84,45 @@ test('Android account session resumes without profile reload loop and syncs thro
     assert.equal(JSON.parse(fs.readFileSync(path.join(first.dir,'offline/backups',fs.readdirSync(path.join(first.dir,'offline/backups'))[0]),'utf8')).tasks[0].title,'手机任务');
   }finally{if(second)second.bridge.close();first.close();}
 });
+test('Android login completes without page reload, auto-syncs, and logout unlocks the offline profile',async()=>{
+  const remoteTask={...task(),id:'remote-task',title:'电脑端已有任务',events:[{...task().events[0],id:'remote-create'}]};
+  let remote={schema:1,tasks:[remoteTask],projects:['个人'],recurrences:[],projectColors:{},projectTrash:[]},version=1,gets=0;
+  const user={id:'switch-user',identities:[{address:'switch@example.com'}]};
+  const c=await context({request:async(url,method,headers,body)=>{
+    if(url.endsWith('/auth/login'))return {user,token:'test-only-switch-token'};
+    if(url.endsWith('/auth/logout'))return {};
+    if(method==='PUT'){assert.equal(body.version,version);remote=body.document;version++;return {version};}
+    gets++;return {document:remote,version,user};
+  }});
+  try{
+    let state=c.api.read().snapshot;state.tasks=[task()];
+    for(let i=0;i<4;i++){const result=c.api.commit(state,state.version);assert.equal(result.ok,true,result.error);state=result.snapshot;}
+    const profiles=[];c.api.onProfile(snapshot=>profiles.push(snapshot));
+    const login=await c.api.cloud('login',{email:'switch@example.com',code:'123456',localDataChoice:'keep',localVersion:state.version});
+    const read=c.api.read();assert.equal(read.ok,true,read.error);
+    assert.equal(login.error,'');assert.equal(login.pending,false);assert.ok(gets>0,'login must automatically sync');
+    assert.equal(read.snapshot.tasks[0].id,'remote-task');assert.ok(read.snapshot.version<state.version,'account version can be lower than offline version');
+    assert.equal(profiles.length,1);assert.ok(profiles[0]?.tasks,'profile event must carry replacement snapshot');
+    assert.equal((await c.api.cloud('sync')).error,'','manual sync must be available immediately');
+    await c.api.cloud('logout');assert.equal(c.api.read().ok,true);assert.equal(c.api.read().snapshot.tasks[0].id,'mobile-task');assert.equal(c.api.cloudStatus().user,null);
+    assert.equal(profiles.length,2);assert.equal((await c.api.cloud('sync')).user,null);
+    const again=await c.api.cloud('login',{email:'switch@example.com',code:'234567',localDataChoice:'keep',localVersion:c.api.read().snapshot.version});
+    assert.equal(again.error,'');assert.equal(c.api.read().ok,true,'second login must not remain switching');
+  }finally{c.close();}
+});
+test('Android failed automatic sync does not strand account switching and manual retry recovers',async()=>{
+  let fail=true,remote=null,version=0;
+  const user={id:'retry-user',identities:[{address:'retry@example.com'}]};
+  const c=await context({request:async(url,method,_headers,body)=>{
+    if(url.endsWith('/auth/login'))return {user,token:'test-only-retry-token'};
+    if(fail)throw new Error('模拟断网');
+    if(method==='PUT'){assert.equal(body.version,version);remote=body.document;version++;return {version};}
+    return {document:remote,version,user};
+  }});
+  try{
+    const login=await c.api.cloud('login',{email:'retry@example.com',code:'123456'});
+    assert.match(login.error,/模拟断网/);assert.equal(c.api.read().ok,true,'network failure must not keep switching lock');
+    const state=c.api.read().snapshot;state.tasks=[task()];assert.equal(c.api.commit(state,state.version).ok,true,'offline editing remains available');
+    fail=false;const synced=await c.api.cloud('sync');assert.equal(synced.error,'');assert.equal(synced.pending,false);assert.equal(remote.tasks[0].title,'手机任务');
+  }finally{c.close();}
+});

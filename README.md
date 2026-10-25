@@ -6,7 +6,7 @@ Windows 离线待办客户端、透明浮窗及安装包，新增 Android 手机
 
 在 `develop` 开发，共用 Windows v1.1.5 的任务、周期、农历、日历、甘特图及云同步逻辑，新增原生 WebView / SQLite、手机触控导航和平板响应式布局。最低 Android 10，需较新的 Android System WebView；首次启动为空的离线清单，可从账号入口登录。
 
-`npm run build:android` 生成 `dist/ToZ-1.1.5-android.2-debug.apk`，需要 JDK 17 / 21 与 Android SDK 36。安装、备份、开发入口及尚未验收的设备能力见 [Android 安装与开发说明](docs/Android安装与开发说明.md)。这是调试签名的测试版，尚未完成手机和平板真机验收；没有后台持续同步、安卓桌面小组件或系统提醒。
+`npm run build:android` 生成 `dist/ToZ-1.1.5-android.3-debug.apk`，需要 JDK 17 / 21 与 Android SDK 36。安装、备份、开发入口及尚未验收的设备能力见 [Android 安装与开发说明](docs/Android安装与开发说明.md)。这是调试签名的测试版，尚未完成手机和平板真机验收；没有后台持续同步、安卓桌面小组件或系统提醒。
 
 新会话从 [项目现状与开发入口](docs/项目现状.md) 开始，了解当前能力、数据契约、代码入口和未实现范围；后续开发按 [文档维护规范](docs/文档维护规范.md) 同步对应说明；每轮完成验证后自动本地提交并推送到当前分支的上游，交付时报告文档、提交和远程核对结果。
 
