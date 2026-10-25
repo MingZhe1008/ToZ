@@ -24,7 +24,7 @@ export function mountDesktopSettings(toast,{setReading}={}){
   });
   selectSettingsTab();
   if(!window.toz)return;
-  if(window.toz.platform==='android')return;
+  if(['android','web'].includes(window.toz.platform))return;
   const guide=document.querySelector('#guide-dialog');
   guide.querySelector('.dialog-eyebrow').textContent='ToZ · 使用指南';
   guide.querySelectorAll('.guide-item p')[2].textContent='新建、完成或改期，各窗口同步更新。桌面浮窗可以拖动、折叠和调节透明度。';
@@ -59,7 +59,7 @@ export async function refreshDesktopSettings(){
   const settings=await window.toz.settings();
   document.querySelectorAll('[data-preference]').forEach(input=>{input.checked=!!settings[input.dataset.preference];});
   document.querySelector('#native-data-path').textContent=settings.dataPath;
-  document.querySelector('#native-version').textContent=`ToZ ${settings.version} · ${window.toz.platform==='android'?'Android':'Windows 客户端'}`;
+  document.querySelector('#native-version').textContent=`ToZ ${settings.version} · ${window.toz.platform==='android'?'Android':window.toz.platform==='web'?'网页版':'Windows 客户端'}`;
   document.querySelector('#startup-warning').textContent=settings.autoLaunch&&!settings.startupEnabled?'自启动已被 Windows 禁用，请在任务管理器的“启动应用”中启用 ToZ。':'';
   return settings;
 }

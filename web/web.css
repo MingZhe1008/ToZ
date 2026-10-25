@@ -1,0 +1,6 @@
+html.web-starting body> :not(#web-loading){visibility:hidden}
+.web-loading{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;background:#1b1b1d;color:#f0f0f2;font:15px/1.7 system-ui;padding:32px;text-align:center;z-index:1000}
+.web-loading h1{font-size:38px;letter-spacing:-2px;margin:0}.web-loading p{max-width:560px;color:#b0b0b7}
+.web-loading button{padding:12px 24px;border:1px solid #64646a;border-radius:8px;color:#f0f0f2;background:#303033;cursor:pointer}
+.web .mobile-header strong span{letter-spacing:.06em}
+@media(min-width:700px){.web #mobile-menu{display:none}.web .mobile-header{padding-inline:28px}.web .mobile-header strong{font-size:23px}}

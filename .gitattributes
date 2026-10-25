@@ -1,0 +1,2 @@
+# Linux deployment scripts must survive Windows checkouts without CRLF conversion.
+scripts/activate-web.sh text eol=lf

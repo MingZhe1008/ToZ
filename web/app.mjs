@@ -1,0 +1,15 @@
+import '../mobile/app.mjs';
+const $=selector=>document.querySelector(selector);
+document.documentElement.classList.add('web');
+$('#native-version').textContent='ToZ 1.1.5-web.1 · 网页版';
+$('#native-data-path').textContent='当前浏览器 · 按账号隔离';
+$('.data-storage-description').textContent='任务先保存在当前浏览器；登录同一邮箱后与 Windows、Android 同步。';
+$('.data-backup-description').textContent='本地快照与任务共用浏览器空间；清理网站数据前请导出 JSON 备份。';
+$('#settings-about .settings-footnote').textContent='在浏览器中安排、执行和回顾。联网时可同步同一账号的其他设备。';
+$('#guide-dialog .dialog-eyebrow').textContent='ToZ · 网页版使用指南';
+$('#guide-dialog .guide-intro').textContent='打开浏览器，接着做手头的事。';
+$('#guide-dialog .prototype-note p').textContent='使用设备当前日期。任务与登录会话保存在当前浏览器，清理网站数据会移除本机副本；请定期导出备份。每个浏览器同一时间只开放一个编辑标签页。';
+$('#settings-data > .settings-footnote').textContent='恢复前先另存安全副本。清理网站数据、无痕窗口关闭或浏览器回收存储可能移除本机任务，请定期导出备份。';
+const cloudNote=document.querySelector('[data-cloud-footnote]');if(cloudNote)cloudNote.textContent='浏览器自动保存 · 登录后同步其他设备';
+document.querySelector('.app-window')?.setAttribute('aria-label','ToZ 网页工作台');
+document.querySelector('.client-stage')?.setAttribute('aria-label','ToZ 网页版');

@@ -13,6 +13,7 @@
     "desktop": "electron .",
     "install:runtime": "node node_modules/electron/install.js",
     "build:win": "node scripts/build-win.cjs",
+    "build:web": "node scripts/build-web.mjs",
     "prepare:android": "node scripts/prepare-android.mjs",
     "build:android": "node scripts/build-android.mjs",
     "test:android": "node --test mobile/runtime.test.mjs",
@@ -28,6 +29,7 @@
     "electron-builder": "26.15.3",
     "esbuild": "0.25.12",
     "lunar-javascript": "1.7.7",
-    "rcedit": "5.0.2"
+    "rcedit": "5.0.2",
+    "sql.js": "1.14.1"
   }
 }
