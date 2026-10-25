@@ -33,7 +33,7 @@ module.exports=async({store,mainWindow,widgetWindow,getSettings,broadcast,output
   const settings=getSettings();settings.webContents.on('console-message',d=>{if(d.level==='error')errors.push(d.message);});
   await wait(async()=>await js(settings,`document.querySelector('#settings-dialog').open&&!document.querySelector('#settings-data').hidden`));
   check(await js(mainWindow,`!document.querySelector('#settings-dialog').open`),'主窗口的设置入口打开独立窗口');
-  check(await js(settings,`window.toz.surface==='settings'&&document.querySelectorAll('.settings-tabs [role=tab]').length===4&&!!document.querySelector('[data-native-action="import"]')`),'独立设置包含四个分类与真实恢复入口');
+  check(await js(settings,`window.toz.surface==='settings'&&[...document.querySelectorAll('.settings-tabs [role=tab]')].map(tab=>tab.dataset.settingsTab).join(',')==='appearance,startup,data,account,about'&&!!document.querySelector('[data-native-action="import"]')`),'独立设置包含五个分类与真实恢复入口');
   await js(settings,`document.querySelector('#settings-data [data-action="trash"]').click()`);
   check(await js(settings,`document.querySelector('#trash-dialog').open&&document.querySelector('#settings-dialog').open`),'设置内打开回收站保留设置窗口');
   await js(settings,`document.querySelector('#trash-dialog [data-close]').click()`);

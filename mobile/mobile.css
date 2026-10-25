@@ -1,0 +1,72 @@
+/* ToZ's neutral palette, with touch navigation and responsive task panes. */
+html.mobile,html.mobile body{height:100%;width:100%;overflow:hidden;background:var(--paper);overscroll-behavior:none}
+.mobile button,.mobile input,.mobile select,.mobile textarea{touch-action:manipulation}
+.mobile button:focus-visible{outline:2px solid var(--muted);outline-offset:2px}
+.mobile .desktop-titlebar,.mobile .studio-bar,.mobile .widget-stage,.mobile .studio-footer{display:none!important}
+.mobile-header{height:60px;display:flex;align-items:center;gap:16px;padding:0 18px;border-bottom:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.mobile-header strong{font-size:20px;letter-spacing:-.7px;flex:1}.mobile-header strong span{font-weight:400;font-size:11px;color:var(--muted);letter-spacing:0;margin-left:14px}
+.mobile-header button{min-width:44px;min-height:44px;font-size:13px;color:var(--ink);border-radius:10px}
+.mobile-header #mobile-menu{font-size:21px}
+.mobile .showcase{height:calc(100dvh - 60px)!important}
+.mobile .app-window{grid-template-columns:192px minmax(0,1fr)!important;grid-template-rows:minmax(0,1fr);height:100%;min-height:0}
+.mobile .sidebar{grid-row:1;grid-column:1;min-height:0;padding:18px 12px 12px}
+.mobile .task-column{grid-row:1;grid-column:2;min-width:0;min-height:0;padding:28px 24px 12px}
+.mobile .detail-column{display:none;min-width:0;min-height:0}
+.mobile.mobile-detail .task-column{display:none}
+.mobile.mobile-detail .detail-column{display:flex;grid-column:2;grid-row:1;padding-top:56px;flex-direction:column;overflow:auto}
+.mobile .calendar-column,.mobile #gantt-view{grid-column:2/-1;grid-row:1;min-width:0;min-height:0;overflow:auto}
+.mobile.mobile-detail .calendar-column,.mobile.mobile-detail #gantt-view{display:none}
+.mobile #task-detail[hidden]{display:none!important}
+.mobile-detail-back{display:none;position:fixed;top:70px;left:216px;z-index:9;min-height:40px;padding:8px 12px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px}
+.mobile-detail .mobile-detail-back{display:block}
+.mobile .icon-button,.mobile .task-pin,.mobile .task-more,.mobile .check-button,.mobile .task-check{min-width:44px;min-height:44px}
+.mobile .check-button,.mobile .task-check{position:relative;min-width:22px;min-height:22px;width:22px;height:22px;margin:11px}
+.mobile .check-button::after,.mobile .task-check::after{content:"";position:absolute;inset:-11px}
+.mobile .project-edit{opacity:1}.mobile kbd{display:none}
+.mobile .task-row{padding:12px 8px;gap:8px}.mobile .task-title{font-size:15px;line-height:1.6}.mobile .task-meta{font-size:11px;line-height:1.7}
+.mobile .nav-item{min-height:44px;font-size:13px}.mobile .project-item{min-height:44px}
+.mobile .task-row .task-pin{opacity:1}.mobile .task-row .task-more{opacity:1}
+.mobile .task-row .task-main{min-width:0}.mobile .column-toolbar{flex-wrap:wrap;gap:10px}.mobile .column-toolbar input{min-height:44px;font-size:14px;min-width:0}
+.mobile .toolbar-add{min-height:44px;font-size:12px}.mobile .account-launcher{min-height:48px}
+.mobile .settings-panel{min-width:0}.mobile .settings-tabs button{min-height:44px}
+.mobile [data-settings-tab=startup],.mobile #settings-startup,.mobile #opacity-range,.mobile #opacity-value,.mobile .opacity-setting{display:none!important}
+.mobile .setting-row:has(#opacity-value){display:none}
+.mobile dialog{max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow:auto;border-radius:18px}
+.mobile dialog input:not([type=checkbox]):not([type=radio]):not([type=range]),.mobile dialog select,.mobile dialog textarea{font-size:16px;min-height:44px}
+.mobile dialog .button,.mobile dialog .icon-button{min-height:44px}
+.mobile .context-menu{max-height:75dvh;overflow-y:auto}.mobile .context-menu button{min-height:44px}
+.mobile .context-menu-item{min-height:44px}
+.mobile .date-picker{max-width:calc(100vw - 16px);max-height:70dvh;overflow:auto}.mobile .picker-day{min-height:38px}
+.mobile .gantt-scroll{overflow:auto;overscroll-behavior-x:contain}.mobile .calendar-task{min-height:24px}
+.mobile-tabs,.mobile-scrim{display:none}
+.mobile-fatal{position:fixed;inset:20%;z-index:100;background:var(--paper);color:var(--ink);padding:30px;border:1px solid var(--line);border-radius:16px}
+.mobile #toast{bottom:84px;max-width:calc(100vw - 32px)}
+@media(min-width:1100px){
+  .mobile .app-window{grid-template-columns:200px minmax(0,1fr) minmax(320px,38%)!important}
+  .mobile .detail-column,.mobile.mobile-detail .detail-column{display:flex;grid-column:3;grid-row:1;overflow:auto;padding-top:24px;flex-direction:column}
+  .mobile.mobile-detail .task-column{display:block}
+  .mobile-detail-back,.mobile-detail .mobile-detail-back{display:none}
+  .mobile .calendar-column,.mobile #gantt-view{grid-column:2/-1}
+  .mobile .calendar-detail-open .detail-column{position:absolute;right:0;top:0;bottom:0;width:38%;z-index:6;background:var(--paper)}
+}
+@media(max-width:699px){
+  .mobile-header{padding:0 12px;height:56px}.mobile-header strong span{font-size:10px;margin-left:10px}
+  .mobile .showcase{height:calc(100dvh - 122px)!important}
+  .mobile .app-window{display:grid!important;grid-template-columns:minmax(0,1fr)!important;position:relative}
+  .mobile .sidebar{position:fixed;top:56px;left:0;bottom:66px;width:min(82vw,300px);z-index:31;background:var(--paper);box-shadow:24px 0 60px #0003;transform:translateX(-110%);transition:transform .18s ease;overflow-y:auto}
+  .mobile-drawer .sidebar{transform:translateX(0)}
+  .mobile .task-column,.mobile.mobile-detail .detail-column,.mobile .calendar-column,.mobile #gantt-view{grid-column:1;grid-row:1}
+  .mobile .task-column{padding:22px 16px 8px}.mobile #view-title{font-size:25px}.mobile .task-header{margin-bottom:18px}
+  .mobile-tabs{height:66px;display:grid;grid-template-columns:repeat(4,1fr);position:fixed;bottom:0;left:0;right:0;z-index:20;background:var(--paper);border-top:1px solid var(--line);padding:8px 8px 10px;gap:4px}
+  .mobile-tabs button{font-size:12px;color:var(--muted);border-radius:12px;min-height:44px}.mobile-tabs button[aria-current=page]{color:var(--ink);background:var(--selection-bg)}.mobile-tabs button:last-child{background:var(--ink);color:var(--paper)}
+  .mobile-detail-back{left:16px;top:64px}.mobile-detail .mobile-detail-back{display:block}
+  .mobile-scrim{position:fixed;inset:56px 0 66px;background:#0008;z-index:30}.mobile-drawer .mobile-scrim{display:block}
+  .mobile dialog{width:calc(100vw - 16px);max-width:none;max-height:calc(100dvh - 16px);padding:20px;margin:auto;border-radius:18px}
+  .mobile .settings-dialog{padding:0}.mobile .settings-layout{display:flex;flex-direction:column;min-height:0}.mobile .settings-tabs{display:flex;flex-direction:row;overflow:auto;width:100%;padding:8px;border-right:0;border-bottom:1px solid var(--line);flex-shrink:0;gap:4px}.mobile .settings-tabs button{flex:0 0 auto;font-size:11px;padding:8px 10px}.mobile .settings-tabs svg{display:none}.mobile .settings-panel{padding:20px 16px}
+  .mobile .settings-body,.mobile .dialog-body{min-height:0;overflow:auto}.mobile .settings-dialog .dialog-body{max-height:calc(100dvh - 125px)}
+  .mobile .task-date-range{grid-template-columns:minmax(0,1fr)}.mobile .setting-row{gap:12px;flex-wrap:wrap}.mobile .dialog-actions{gap:8px;flex-wrap:wrap}
+  .mobile .calendar-column{padding:14px 8px}.mobile .calendar-day{min-width:0}.mobile .calendar-weekdays{font-size:10px}.mobile .calendar-task{font-size:9px;white-space:nowrap;overflow:hidden}.mobile .calendar-cell{min-height:80px;min-width:0}
+  .mobile .calendar-board{min-width:0;width:100%}.mobile .month-weekdays>span{padding:10px 3px;font-size:9px;text-align:center}.mobile .calendar-day-heading{padding:6px 3px;gap:2px;flex-wrap:wrap}.mobile .calendar-lunar{font-size:8px}.mobile .calendar-span{padding:3px;margin-inline:1px;gap:0}.mobile .calendar-span .calendar-check,.mobile .calendar-span .task-pin{display:none}.mobile .calendar-span .calendar-task-title{font-size:10px;min-width:0;overflow:hidden}.mobile .calendar-subbar{flex-wrap:wrap;gap:8px}.mobile .calendar-search{width:140px}.mobile .calendar-bottom{font-size:9px;gap:8px;flex-wrap:wrap}
+  .mobile .trash-row{flex-wrap:wrap}.mobile .trash-actions{margin-top:8px}.mobile .detail-column{padding:56px 20px 20px}
+}
+@media(prefers-reduced-motion:reduce){.mobile .sidebar{transition:none}}

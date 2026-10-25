@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:label="ToZ" android:theme="@android:style/Theme.Material.NoActionBar"
+        android:icon="@drawable/ic_toz" android:allowBackup="false" android:fullBackupContent="false" android:usesCleartextTraffic="false"
+        android:supportsRtl="true" android:enableOnBackInvokedCallback="false"
+        android:dataExtractionRules="@xml/data_extraction_rules" tools:targetApi="33">
+        <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
