@@ -23,6 +23,7 @@ function createService({directory,pepper,sendMail,trustProxy=false,now=Date.now}
     CREATE TABLE IF NOT EXISTS revisions(user_id TEXT NOT NULL,version INTEGER NOT NULL,data TEXT NOT NULL,created INTEGER NOT NULL,PRIMARY KEY(user_id,version));
     CREATE TABLE IF NOT EXISTS limits(key TEXT PRIMARY KEY,count INTEGER NOT NULL,expires INTEGER NOT NULL);`);
   if(!db.prepare('PRAGMA table_info(users)').all().some(column=>column.name==='avatar'))db.exec('ALTER TABLE users ADD COLUMN avatar TEXT');
+  if(!db.prepare('PRAGMA table_info(users)').all().some(column=>column.name==='nickname'))db.exec('ALTER TABLE users ADD COLUMN nickname TEXT');
   const digest=(email,purpose,owner,code)=>crypto.createHmac('sha256',pepper).update(JSON.stringify([email,purpose,owner,code])).digest('hex');
   function limit(key,max,duration){
     const row=db.prepare('SELECT * FROM limits WHERE key=?').get(key),time=now();
@@ -36,7 +37,7 @@ function createService({directory,pepper,sendMail,trustProxy=false,now=Date.now}
     return session;
   }
   const identities=userId=>db.prepare('SELECT kind,address FROM identities WHERE user_id=? ORDER BY address').all(userId);
-  const userOf=id=>({id,identities:identities(id),avatar:db.prepare('SELECT avatar FROM users WHERE id=?').get(id)?.avatar||null});
+  const userOf=id=>{const row=db.prepare('SELECT avatar,nickname FROM users WHERE id=?').get(id);return {id,identities:identities(id),avatar:row?.avatar||null,nickname:row?.nickname||null};};
   async function route(req,body){
     const url=new URL(req.url,'http://localhost');
     const ip=trustProxy?(req.headers['x-real-ip']||req.socket.remoteAddress):req.socket.remoteAddress;
@@ -75,6 +76,13 @@ function createService({directory,pepper,sendMail,trustProxy=false,now=Date.now}
     }
     const session=auth(req),id=session.user_id;
     if(req.method==='GET'&&url.pathname==='/account')return {user:userOf(id)};
+    if(req.method==='PUT'&&url.pathname==='/account/nickname'){
+      if(typeof body.nickname!=='string')throw failure(400,'昵称格式无效');
+      const nickname=body.nickname.trim();
+      if(Array.from(nickname).length>30||/[\u0000-\u001f\u007f-\u009f]/.test(nickname))throw failure(400,'昵称限 30 个字符，不能包含换行或控制字符');
+      limit('nickname:'+id,30,3600000);
+      db.prepare('UPDATE users SET nickname=? WHERE id=?').run(nickname||null,id);return {user:userOf(id)};
+    }
     if(req.method==='PUT'&&url.pathname==='/account/avatar'){
       limit('avatar:'+id,30,3600000);
       const avatar=body.avatar;

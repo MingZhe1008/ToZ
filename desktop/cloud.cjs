@@ -38,6 +38,11 @@ class Cloud {
     if(this.running)await this.running;
     const result=await this.api('/account/avatar',{avatar},'PUT');this.user=result.user;this.saveSession();return this.status();
   }
+  async nickname(nickname){
+    if(!this.user)throw new Error('请先登录账号');
+    if(this.running)await this.running;
+    const result=await this.api('/account/nickname',{nickname},'PUT');this.user=result.user;this.saveSession();return this.status();
+  }
   async logout(){
     if(this.running)throw new Error('正在同步，请稍后退出');
     try{await this.api('/auth/logout',{});}catch{/* Local logout remains available offline. */}
