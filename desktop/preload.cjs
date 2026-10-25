@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('toz', {
   purge: (request, version) => ipcRenderer.sendSync('toz:purge', {request,version}),
   settings: () => ipcRenderer.invoke('toz:settings'),
   cloud: (action,argument) => ipcRenderer.invoke('toz:cloud',action,argument),
+  cloudStatus: () => ipcRenderer.sendSync('toz:cloud-status'),
+  onCloud: callback => { ipcRenderer.on('toz:cloud-state',(_,state)=>callback(state)); },
   enter: action => ipcRenderer.invoke('toz:entry',action),
   onProfile: callback => { ipcRenderer.on('toz:profile',()=>callback()); },
   configure: patch => ipcRenderer.invoke('toz:configure', patch),
