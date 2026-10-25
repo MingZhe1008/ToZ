@@ -17,12 +17,12 @@ function fixture(t){
 }
 function task(title='任务'){return createTask(title,'2026-10-25','ToZ','','2026-10-25');}
 function doc(){return {schema:1,tasks:[task('A'),task('B')],projects:['ToZ'],recurrences:[],projectColors:{},projectTrash:[]};}
-test('旧账号表增加头像列后保留账号且默认无头像',t=>{
+test('旧账号表增加头像与昵称列后保留账号和缺省资料',t=>{
   const {root,cleanups}=fixture(t),directory=path.join(root,'legacy-server');fs.mkdirSync(directory,{recursive:true});
   const {DatabaseSync}=require('node:sqlite'),old=new DatabaseSync(path.join(directory,'sync.sqlite'));
   old.exec("CREATE TABLE users(id TEXT PRIMARY KEY,created INTEGER NOT NULL);INSERT INTO users VALUES('legacy-user',123)");old.close();
   const service=createService({directory,pepper:'legacy-test-secret-'.repeat(3),sendMail:async()=>{}});cleanups.push(()=>service.close());
-  assert.deepEqual({...service.db.prepare('SELECT * FROM users').get()},{id:'legacy-user',created:123,avatar:null});
+  assert.deepEqual({...service.db.prepare('SELECT * FROM users').get()},{id:'legacy-user',created:123,avatar:null,nickname:null});
 });
 test('不同任务并发修改合并；同一任务冲突保留双方，选择仅作用于冲突项',()=>{
   const base=doc(),a=structuredClone(base),b=structuredClone(base);a.tasks[0].title='A 本机';b.tasks[1].title='B 云端';
@@ -64,6 +64,18 @@ async function service(t){
   async function login(email){time+=61000;assert.equal((await api('/auth/code',{email})).status,200);return (await api('/auth/login',{email,code:mail.get(email)})).data;}
   return {root,makeStore,api,login,mail,url,service,advance:ms=>time+=ms};
 }
+test('昵称需要登录、校验字符和长度、清空恢复默认且账号隔离',async t=>{
+  const {api,login}=await service(t),a=await login('nick-a@example.com'),b=await login('nick-b@example.com');
+  assert.equal((await api('/account/nickname',{nickname:'未登录'},null,'PUT')).status,401);
+  assert.equal((await api('/account/nickname',{nickname:'甲'.repeat(31)},a.token,'PUT')).status,400);
+  assert.equal((await api('/account/nickname',{nickname:'甲\n乙'},a.token,'PUT')).status,400);
+  assert.equal((await api('/account/nickname',{nickname:123},a.token,'PUT')).status,400);
+  const changed=await api('/account/nickname',{nickname:'  小明🌱  '},a.token,'PUT');assert.equal(changed.data.user.nickname,'小明🌱');
+  assert.equal((await api('/sync',null,a.token)).data.user.nickname,'小明🌱');
+  assert.equal((await api('/account',null,b.token)).data.user.nickname,null);
+  assert.equal((await login('nick-a@example.com')).user.nickname,'小明🌱');
+  assert.equal((await api('/account/nickname',{nickname:'  '},a.token,'PUT')).data.user.nickname,null);
+});
 test('验证码自动注册、单次消费、错误次数限制、过期及发送限流',async t=>{
   const {api,mail,advance}=await service(t),email='one@example.com';
   assert.equal((await api('/auth/code',{email})).status,200);const code=mail.get(email);

@@ -169,8 +169,8 @@ function handlers(){
   });
   handle('toz:cloud',async(action,arg={})=>{
     if(!cloud)throw new Error('云同步不可用');
-    if(!['status','code','login','logout','sync','bind','resolve','avatar','reset-avatar'].includes(action))throw new Error('未知账号操作');
-    const mutation=['login','bind','logout','avatar','reset-avatar'].includes(action);
+    if(!['status','code','login','logout','sync','bind','resolve','avatar','reset-avatar','nickname'].includes(action))throw new Error('未知账号操作');
+    const mutation=['login','bind','logout','avatar','reset-avatar','nickname'].includes(action);
     if(mutation&&cloud.authBusy)throw new Error('账号操作进行中，请稍后重试');
     if(mutation)cloud.authBusy=true;
     try{
@@ -179,6 +179,7 @@ function handlers(){
     if(action==='bind')return await cloud.bind(arg.email,arg.code);
     if(action==='logout'){const result=await cloud.logout();if(!smoke||entryReview)await returnToEntry();return result;}
     if(action==='sync')return cloud.sync();
+    if(action==='nickname')return await cloud.nickname(arg.nickname);
     const owner=BrowserWindow.getFocusedWindow()||entryWindow||mainWindow;
     if(action==='reset-avatar')return await cloud.avatar(null);
     if(action==='avatar'){

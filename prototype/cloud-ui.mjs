@@ -7,17 +7,17 @@ export function refreshCloudChrome(state=api?.cloudStatus?.()){
   if(footer&&!footer.classList.contains('error')){footer.replaceChildren();const dot=document.createElement('span');dot.className='live-dot';footer.append(dot,document.createTextNode(presentation.save));footer.title=presentation.title;}
   document.querySelectorAll('[data-cloud-save-label]').forEach(label=>{if(!label.dataset.saveError){label.textContent=presentation.save;label.title=presentation.title;}});
   const note=document.querySelector('[data-cloud-footnote]');if(note)note.textContent=presentation.footnote;
-  const signed=!!state?.user,email=state?.user?.identities?.[0]?.address||'',name=signed?email.split('@')[0]||'我的账号':'离线使用';
+  const signed=!!state?.user,email=state?.user?.identities?.[0]?.address||'',name=signed?state.user.nickname||email.split('@')[0]||'我的账号':'离线使用';
   if($('sidebar-account-name')){
     $('sidebar-account-name').textContent=name;$('sidebar-account-detail').textContent=signed?'个人账号':'点击登录账号';$('account-launcher').title=signed?email:'离线使用 · 点击登录账号';
-    $('account-menu-name').textContent=signed?'我的账号':'离线使用';$('account-menu-email').textContent=email||'登录后可同步多台电脑';
+    $('account-menu-name').textContent=signed?state.user.nickname||'我的账号':'离线使用';$('account-menu-email').textContent=email||'登录后可同步多台电脑';
     const avatar=state?.user?.avatar;
     document.querySelectorAll('[data-account-avatar]').forEach(container=>{
       if(avatar?.startsWith('data:image/png;base64,')){
         if(container.querySelector('img')?.getAttribute('src')!==avatar){const image=document.createElement('img');image.alt='';image.src=avatar;container.replaceChildren(image);}
-      }else container.textContent=signed?name.slice(0,1).toLocaleUpperCase():'T';
+      }else container.textContent=signed?Array.from(name)[0]?.toLocaleUpperCase()||'T':'T';
     });
-    for(const action of ['avatar','reset-avatar','logout'])document.querySelector(`[data-account-command="${action}"]`).disabled=!signed||action==='reset-avatar'&&!avatar;
+    for(const action of ['avatar','reset-avatar','logout','nickname'])document.querySelector(`[data-account-command="${action}"]`).disabled=!signed||action==='reset-avatar'&&!avatar;
     document.querySelector('[data-account-command="account"]').textContent=signed?'账号与同步':'登录账号';
   }
 }
@@ -30,7 +30,7 @@ launcher?.addEventListener('click',()=>{
   refreshCloudChrome();menu.hidden=false;launcher.setAttribute('aria-expanded','true');
   const anchor=launcher.getBoundingClientRect(),box=menu.getBoundingClientRect();menu.style.left=Math.max(8,Math.min(anchor.left,innerWidth-box.width-8))+'px';menu.style.top=Math.max(8,anchor.top-box.height-8)+'px';menu.querySelector('button:not(:disabled)')?.focus();
 });
-menu?.addEventListener('click',event=>{const button=event.target.closest('[data-account-command]');if(!button||button.disabled)return;closeAccountMenu();const action=button.dataset.accountCommand;if(['account','settings'].includes(action))document.dispatchEvent(new CustomEvent('toz:account-open',{detail:action}));else accountCommand?.(action);});
+menu?.addEventListener('click',event=>{const button=event.target.closest('[data-account-command]');if(!button||button.disabled)return;closeAccountMenu();const action=button.dataset.accountCommand;if(['account','settings'].includes(action))document.dispatchEvent(new CustomEvent('toz:account-open',{detail:action}));else if(action==='nickname'){const input=$('nickname-form').elements.nickname;input.value=api.cloudStatus().user?.nickname||'';input.setCustomValidity('');$('nickname-error').textContent='';$('nickname-dialog').showModal();input.focus();input.select();}else accountCommand?.(action);});
 document.addEventListener('pointerdown',event=>{if(!event.target.closest('#account-menu,#account-launcher'))closeAccountMenu();});
 document.addEventListener('keydown',event=>{
   if(!menu||menu.hidden)return;
@@ -61,12 +61,14 @@ if(api?.cloud){
   api.onCloud(state=>render(state));
   async function run(fn){
     if(working)return;working=true;
-    $('cloud-controls').querySelectorAll('button').forEach(b=>b.disabled=true);
+    document.querySelectorAll('#cloud-controls button,#nickname-dialog button,#nickname-dialog input').forEach(b=>b.disabled=true);
     try{const result=await fn();render(result?.user!==undefined||result?.server?result:await api.cloud('status'));}
-    catch(e){$('cloud-error').textContent=e.message;document.dispatchEvent(new CustomEvent('toz:account-feedback',{detail:e.message}));}
-    finally{working=false;$('cloud-controls').querySelectorAll('button').forEach(b=>b.disabled=false);updateCooldowns();}
+    catch(e){$('cloud-error').textContent=e.message;if($('nickname-dialog').open)$('nickname-error').textContent=e.message;document.dispatchEvent(new CustomEvent('toz:account-feedback',{detail:e.message}));}
+    finally{working=false;document.querySelectorAll('#cloud-controls button,#nickname-dialog button,#nickname-dialog input').forEach(b=>b.disabled=false);updateCooldowns();}
   }
   accountCommand=action=>run(()=>api.cloud(action));
+  $('nickname-form').elements.nickname.addEventListener('input',event=>{const value=event.target.value.trim();event.target.setCustomValidity(Array.from(value).length>30?'昵称最多 30 个字符':'');});
+  $('nickname-form').addEventListener('submit',event=>{event.preventDefault();run(async()=>{const result=await api.cloud('nickname',{nickname:event.currentTarget.elements.nickname.value});$('nickname-dialog').close();return result;});});
   for(const purpose of ['login','bind']){
     const form=$(`cloud-${purpose}-form`),button=form.querySelector('[data-cloud-code]');
     button.addEventListener('click',()=>{
