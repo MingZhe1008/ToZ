@@ -295,7 +295,7 @@ async function setReadingPreference(key,value){
   applyAppearance();
 }
 async function openSettings(tab='appearance'){
-  if(native&&native.surface!=='settings'){await nativeCommand('open-settings',{tab});return;}
+  if(native&&native.platform!=='android'&&native.surface!=='settings'){await nativeCommand('open-settings',{tab});return;}
   if(native)await refreshDesktopSettings();selectSettingsTab(tab,{focus:native?.surface==='settings'});
   if(native?.surface!=='settings')openDialog('#settings-dialog');
 }
@@ -428,7 +428,7 @@ document.addEventListener('click',async event=>{
     case 'edit-subtask':if(task)openSubtaskEdit(task.id,target.dataset.subtask);break;
     case 'trash':if(native?.surface==='widget')nativeCommand('open-main',{action:'trash'});else openTrash();break;
     case 'new-project':openProject();break;
-    case 'edit-project':openProject(target.dataset.project);break;
+    case 'edit-project':if(native?.platform==='android')contextMenu.openAt(target,{kind:'project',name:target.dataset.project});else openProject(target.dataset.project);break;
     case 'task-pin':if(task)mutate(()=>toggleTaskPin(task),task.top?'已取消置顶':'任务已置顶');break;
     case 'toggle-widget':if(event.detail>1)break;if(native)await nativeCommand('toggle-widget');else{widgetVisible=!widgetVisible;$('.widget-stage').hidden=!widgetVisible;render();}break;
     case 'theme-light':case 'theme-dark':dark=target.dataset.action==='theme-dark';save();applyAppearance();reportRenderer();break;
@@ -584,9 +584,10 @@ function contextItems(entity){
   if(entity.kind==='app')return [
     {key:'app-new',label:'添加待办',icon:'plus',shortcut:'N'},
     {key:'app-search',label:'搜索任务',icon:'search',shortcut:'Ctrl K'},
-    {separator:true},{key:'app-widget',label:widgetVisible?'隐藏桌面浮窗':'显示桌面浮窗',icon:'layers'},
+    {separator:true},...(native?.platform==='android'?[{key:'app-trash',label:'打开回收站',icon:'trash'}]:[{key:'app-widget',label:widgetVisible?'隐藏桌面浮窗':'显示桌面浮窗',icon:'layers'}]),
     {key:'app-settings',label:'设置…',icon:'settings',shortcut:'Ctrl ,'},
     {separator:true},{key:'app-export',label:'导出完整备份…',icon:'shield'},
+    ...(native?.platform==='android'?[{key:'app-import',label:'从备份恢复…',icon:'history'}]:[]),
     {key:'app-about',label:'关于 ToZ',icon:'info'},
     ...(native?[{separator:true},{key:'app-quit',label:'退出 ToZ',icon:'external'}]:[])
   ];

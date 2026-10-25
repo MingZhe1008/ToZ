@@ -1,6 +1,6 @@
 const localDate = () => new Date().toLocaleDateString('sv-SE');
-export let TODAY = typeof window !== 'undefined' && window.toz ? localDate() : '2026-10-20';
-export function refreshToday() { if(typeof window==='undefined'||!window.toz)return false;const next=localDate();if(next===TODAY)return false;TODAY=next;return true; }
+export let TODAY = typeof window !== 'undefined' && (window.toz || window.ToZAndroid) ? localDate() : '2026-10-20';
+export function refreshToday() { if(typeof window==='undefined'||!(window.toz||window.ToZAndroid))return false;const next=localDate();if(next===TODAY)return false;TODAY=next;return true; }
 export function addDays(date, days) {const value=new Date(date+'T00:00:00Z');value.setUTCDate(value.getUTCDate()+days);return value.toISOString().slice(0,10);}
 export const uid = () => crypto.randomUUID();
 export const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value;

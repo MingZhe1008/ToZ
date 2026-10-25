@@ -10,3 +10,11 @@ artifacts/
 *.db
 *.db-*
 *.log
+android/.gradle/
+android/local.properties
+android/.idea/
+android/*.iml
+android/**/build/
+android/app/src/main/assets/app/
+*.jks
+*.keystore

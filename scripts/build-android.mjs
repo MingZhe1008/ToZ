@@ -1,0 +1,15 @@
+import './prepare-android.mjs';
+import {spawnSync} from 'node:child_process';
+import fs from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+const root=fileURLToPath(new URL('../',import.meta.url));
+const sdk=process.env.ANDROID_HOME||process.env.ANDROID_SDK_ROOT||path.join(root,'.runtime/android-tools/sdk');
+if(!fs.existsSync(path.join(sdk,'platforms/android-36/android.jar')))throw new Error('请安装 Android SDK Platform 36 并设置 ANDROID_HOME，见 docs/Android安装与开发说明.md');
+const result=spawnSync(process.platform==='win32'?'cmd.exe':'sh',process.platform==='win32'?['/d','/s','/c','gradlew.bat :app:assembleDebug --console=plain']:['./gradlew',':app:assembleDebug','--console=plain'],{cwd:path.join(root,'android'),stdio:'inherit',env:{...process.env,ANDROID_HOME:sdk}});
+if(result.error)throw result.error;
+if(result.status!==0)process.exit(result.status||1);
+const output=path.join(root,'dist/ToZ-1.1.5-android.1-debug.apk');
+fs.mkdirSync(path.dirname(output),{recursive:true});
+fs.copyFileSync(path.join(root,'android/app/build/outputs/apk/debug/app-debug.apk'),output);
+console.log('Android APK:',output);

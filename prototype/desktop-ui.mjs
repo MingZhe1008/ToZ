@@ -1,6 +1,7 @@
 const tabs=['appearance','startup','data','account','about'];
 export function selectSettingsTab(tab='appearance',{focus=false}={}){
-  const selected=tabs.includes(tab)?tab:'appearance';
+  const available=tabs.filter(name=>!document.querySelector(`[data-settings-tab="${name}"]`)?.hidden);
+  const selected=available.includes(tab)?tab:'appearance';
   document.querySelectorAll('[data-settings-tab]').forEach(button=>{
     const active=button.dataset.settingsTab===selected;button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1;
     if(active&&focus)button.focus();
@@ -14,8 +15,8 @@ export function mountDesktopSettings(toast,{setReading}={}){
   dialog.querySelector('.settings-tabs').addEventListener('click',event=>{const button=event.target.closest('[data-settings-tab]');if(button)selectSettingsTab(button.dataset.settingsTab);});
   dialog.querySelector('.settings-tabs').addEventListener('keydown',event=>{
     const button=event.target.closest('[data-settings-tab]');if(!button||!['ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
-    event.preventDefault();const index=tabs.indexOf(button.dataset.settingsTab),delta=['ArrowUp','ArrowLeft'].includes(event.key)?-1:1;
-    selectSettingsTab(tabs[event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+delta+tabs.length)%tabs.length],{focus:true});
+    event.preventDefault();const available=tabs.filter(name=>!document.querySelector(`[data-settings-tab="${name}"]`)?.hidden),index=available.indexOf(button.dataset.settingsTab),delta=['ArrowUp','ArrowLeft'].includes(event.key)?-1:1;
+    selectSettingsTab(available[event.key==='Home'?0:event.key==='End'?available.length-1:(index+delta+available.length)%available.length],{focus:true});
   });
   dialog.addEventListener('change',async event=>{
     const input=event.target.closest('[data-reading]');if(!input)return;input.disabled=true;
@@ -23,6 +24,7 @@ export function mountDesktopSettings(toast,{setReading}={}){
   });
   selectSettingsTab();
   if(!window.toz)return;
+  if(window.toz.platform==='android')return;
   const guide=document.querySelector('#guide-dialog');
   guide.querySelector('.dialog-eyebrow').textContent='ToZ · 使用指南';
   guide.querySelectorAll('.guide-item p')[2].textContent='新建、完成或改期，各窗口同步更新。桌面浮窗可以拖动、折叠和调节透明度。';
@@ -57,7 +59,7 @@ export async function refreshDesktopSettings(){
   const settings=await window.toz.settings();
   document.querySelectorAll('[data-preference]').forEach(input=>{input.checked=!!settings[input.dataset.preference];});
   document.querySelector('#native-data-path').textContent=settings.dataPath;
-  document.querySelector('#native-version').textContent=`ToZ ${settings.version} · Windows 客户端`;
+  document.querySelector('#native-version').textContent=`ToZ ${settings.version} · ${window.toz.platform==='android'?'Android':'Windows 客户端'}`;
   document.querySelector('#startup-warning').textContent=settings.autoLaunch&&!settings.startupEnabled?'自启动已被 Windows 禁用，请在任务管理器的“启动应用”中启用 ToZ。':'';
   return settings;
 }
