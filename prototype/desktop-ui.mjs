@@ -1,4 +1,4 @@
-const tabs=['appearance','startup','data','about'];
+const tabs=['appearance','startup','data','account','about'];
 export function selectSettingsTab(tab='appearance',{focus=false}={}){
   const selected=tabs.includes(tab)?tab:'appearance';
   document.querySelectorAll('[data-settings-tab]').forEach(button=>{
@@ -38,7 +38,7 @@ export function mountDesktopSettings(toast,{setReading}={}){
   dialog.querySelector('.reset-button')?.remove();
   dialog.querySelector('#native-window-actions').innerHTML='<button class="button secondary" data-native-action="desktop-shortcut">创建桌面快捷方式</button><button class="button secondary" data-native-action="click-through">开启鼠标穿透</button><button class="button secondary" data-native-action="recover-interaction">恢复浮窗交互</button>';
   dialog.querySelector('#native-data-actions').innerHTML='<div class="setting-row"><div><b>从备份恢复</b><small>确认后替换；先另存安全副本</small></div><button class="button secondary" data-native-action="import">恢复备份…</button></div>';
-  dialog.querySelector('.data-storage-description').textContent='使用 SQLite 保存任务，无需账户或网络。';
+  dialog.querySelector('.data-storage-description').textContent='任务先保存在本机 SQLite；登录账号后可同步多台 Windows 电脑。';
   dialog.querySelector('.data-backup-description').textContent='保留最近十四份每日最新快照。';
   dialog.querySelector('.settings-status-text').textContent='自动保存';
   dialog.querySelector('#native-about-actions').innerHTML='<button class="button secondary" data-native-action="quit">退出 ToZ</button>';
@@ -56,7 +56,7 @@ export async function refreshDesktopSettings(){
   const settings=await window.toz.settings();
   document.querySelectorAll('[data-preference]').forEach(input=>{input.checked=!!settings[input.dataset.preference];});
   document.querySelector('#native-data-path').textContent=settings.dataPath;
-  document.querySelector('#native-version').textContent=`ToZ ${settings.version} · Windows 离线客户端`;
+  document.querySelector('#native-version').textContent=`ToZ ${settings.version} · Windows 客户端`;
   document.querySelector('#startup-warning').textContent=settings.autoLaunch&&!settings.startupEnabled?'自启动已被 Windows 禁用，请在任务管理器的“启动应用”中启用 ToZ。':'';
   return settings;
 }

@@ -1,0 +1,6 @@
+[Unit]
+Description=Renew ToZ IP TLS certificate
+
+[Service]
+Type=oneshot
+ExecStart=/opt/toz-sync/certbot/bin/certbot renew --quiet --deploy-hook "/usr/bin/systemctl reload nginx"

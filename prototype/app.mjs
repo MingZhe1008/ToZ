@@ -535,6 +535,7 @@ if(native){
   }
   if(native.surface==='quick-add')openNew(new URLSearchParams(location.search).get('date')||undefined);
   reportRenderer();
+  native.onProfile(()=>{document.querySelectorAll('dialog[open]:not(#settings-dialog)').forEach(dialog=>dialog.close());selected=null;view='today';});
   native.onState(snapshot=>{if(snapshot.version>dataVersion)applySnapshot(snapshot);if(native.surface==='settings')refreshDesktopSettings().catch(error=>toast(error.message));});
   native.onCommand(async command=>{if(!command)return;if(['gantt','calendar','today'].includes(command.action)){$('dialog[open]')?.close();view=command.action;calendarDetailOpen=false;render();reportRenderer();}if(command.action==='new')openNew(command.date);if(command.action==='project')openProject(command.name);if(command.action==='edit'){selected=command.id;view='all';render();openEdit(tasks.find(t=>t.id===command.id));}if(command.action==='edit-subtask')openSubtaskEdit(command.id,command.subId);if(command.action==='trash')openTrash();if(command.action==='add-subtask'){selected=command.id;view='all';render();$('#subtask-form input')?.focus();}if(command.action==='settings')await openSettings(command.tab);if(command.action==='select'||command.action==='reschedule'){selected=command.id;view='all';render();if(command.action==='reschedule')openReschedule(command.id);}});
   setInterval(()=>{if(refreshToday()){calendarMonth=TODAY.slice(0,7);ensureRecurrences();render();}},30000);

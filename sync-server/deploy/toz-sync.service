@@ -1,0 +1,22 @@
+[Unit]
+Description=ToZ account and synchronization API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=toz-sync
+Group=toz-sync
+WorkingDirectory=/opt/toz-sync/app/sync-server
+EnvironmentFile=/etc/toz-sync/server.env
+ExecStart=/opt/toz-sync/node/bin/node /opt/toz-sync/app/sync-server/server.cjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/toz-sync
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

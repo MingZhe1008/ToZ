@@ -191,6 +191,17 @@ class Store {
     try { this.db.exec('DELETE FROM events; DELETE FROM tasks;');this.writeTasks(snapshot.tasks);this.setMeta('recurrences',snapshot.recurrences||[]);this.setMeta('preferences',preferences(snapshot.preferences,projectList(snapshot.projects,snapshot.tasks),snapshot.tasks));this.setMeta('projects',projectList(snapshot.projects,snapshot.tasks));this.setMeta('dark',snapshot.dark!==false);this.setMeta('opacity',Math.max(35,Math.min(95,Number(snapshot.opacity)||82)));this.setMeta('version',this.meta('version',0)+1);this.db.exec('COMMIT'); }catch(e){this.db.exec('ROLLBACK');throw e;}
     return this.snapshot();
   }
+  applyCloud(document,expectedVersion){
+    const {validateDocument}=require('./sync-model.cjs');validateDocument(document);
+    const current=this.snapshot();
+    if(current.version!==expectedVersion)throw new Error('本地数据已更新，请重新同步');
+    const ids=new Set(document.tasks.map(t=>t.id));
+    const localPreferences={...current.preferences,projectColors:document.projectColors,projectTrash:document.projectTrash,taskOrder:current.preferences.taskOrder.filter(id=>ids.has(id)),widgetProject:document.projects.includes(current.preferences.widgetProject)?current.preferences.widgetProject:''};
+    if(document.projectTrash.some(p=>p.name===localPreferences.widgetProject))localPreferences.widgetProject='';
+    // A separate, validated transaction is required for remote purges and resolved conflicts.
+    // Normal commit still enforces the original immutable-history guards.
+    return this.restore({...current,...document,preferences:localPreferences});
+  }
   close(){this.db.close();}
 }
 module.exports={Store,validateSnapshot,DEFAULT_SETTINGS};
