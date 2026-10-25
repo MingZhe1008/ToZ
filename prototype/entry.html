@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <script src="./desktop-mode.js"></script>
+  <title>欢迎使用 ToZ</title>
+  <link rel="stylesheet" href="./workspace-theme.css">
+  <link rel="stylesheet" href="./entry.css">
+</head>
+<body>
+  <header class="entry-titlebar"><img src="./icon.svg" alt=""><span>ToZ</span></header>
+  <main class="entry-shell">
+    <section class="entry-story" aria-label="欢迎使用 ToZ">
+      <div class="entry-wordmark" aria-hidden="true">t<span>z</span></div>
+      <p class="entry-eyebrow">让开始有迹可循</p>
+      <h1>从这里，<br>继续你的计划。</h1>
+      <p class="entry-description">登录账号，在不同电脑间接着做。<br>也可以离线使用，留一份自己的节奏。</p>
+      <div class="entry-footprint"><span aria-hidden="true">● ─── ○ ─── ○</span><p>计划可以改变，开始值得被记住。</p></div>
+    </section>
+    <section class="entry-access" aria-labelledby="entry-heading">
+      <div class="entry-form-content"><p class="entry-eyebrow">欢迎回来</p><h2 id="entry-heading">登录 ToZ</h2><p class="entry-subtitle">使用邮箱验证码，无需密码。</p>
+        <form id="entry-login-form">
+          <label for="entry-email">邮箱地址</label><input id="entry-email" name="email" type="email" autocomplete="email" maxlength="254" placeholder="你的邮箱地址" required autofocus>
+          <label for="entry-code">验证码</label><div class="entry-code-row"><input id="entry-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="6 位验证码" required><button id="entry-send-code" type="button">获取验证码</button></div>
+          <p id="entry-message" role="status" aria-live="polite"></p><p id="entry-error" role="alert"></p>
+          <button id="entry-login" type="submit" class="entry-primary">登录 / 注册并进入</button>
+        </form>
+        <p class="entry-register-note">首次验证后自动注册。已有本机任务可选择复制到账号。</p>
+        <div class="entry-divider"><span>或者</span></div>
+        <button id="entry-offline" type="button" class="entry-offline">离线使用 <span aria-hidden="true">→</span></button>
+        <p class="entry-offline-note">无需网络或账号，任务保存在这台电脑。<br>之后仍可在设置中登录并开启同步。</p>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./entry.mjs"></script>
+</body>
+</html>
