@@ -29,7 +29,7 @@ function startupState(){return startup.state();}
 function showMain(command){if(!workspaceReady){openEntryWindow().catch(error=>dialog.showErrorBox('ToZ',error.message));return;}if(!mainWindow)return;if(mainWindow.isMinimized())mainWindow.restore();mainWindow.show();mainWindow.focus();if(command)mainWindow.webContents.send('toz:ui-command',command);}
 function titleBarTheme(dark){return {color:dark?'#252527':'#f8f8f7',symbolColor:dark?'#f0f0f2':'#252527',height:38};}
 function applyTheme(){const dark=store.snapshot().dark;for(const window of [mainWindow,quickAddWindow,settingsWindow,entryWindow])if(window&&!window.isDestroyed()){window.setBackgroundColor(dark?'#29292c':'#ffffff');window.setTitleBarOverlay(titleBarTheme(dark));}}
-function broadcast(){applyTheme();const snapshot=store.snapshot();for(const w of [mainWindow,widgetWindow,quickAddWindow,settingsWindow])if(w&&!w.isDestroyed())w.webContents.send('toz:state',snapshot);}
+function broadcast(){applyTheme();const snapshot=store.snapshot(),cloudState=cloud?.status()||{user:null,busy:false,pending:false,error:'',lastSync:null,conflicts:[]};for(const w of [mainWindow,widgetWindow,quickAddWindow,settingsWindow])if(w&&!w.isDestroyed()){w.webContents.send('toz:state',snapshot);w.webContents.send('toz:cloud-state',cloudState);}}
 function secure(window){window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('file:'))event.preventDefault();});}
 async function openEntryWindow(){
   if(entryWindow&&!entryWindow.isDestroyed()){entryWindow.show();entryWindow.focus();return;}
@@ -149,6 +149,7 @@ function switchProfile(id,importLocal){
   if(mainWindow)broadcast();
 }
 function handlers(){
+  ipcMain.on('toz:cloud-status',event=>{event.returnValue=trusted(event)?cloud?.status()||{user:null,busy:false,pending:false,error:'',lastSync:null,conflicts:[]}:null;});
   ipcMain.on('toz:read',event=>{event.returnValue=trusted(event)?{ok:true,snapshot:store.snapshot()}:{ok:false,error:'无效窗口'};});
   ipcMain.on('toz:commit',(event,{snapshot,version})=>{
     try{if(!trusted(event))throw new Error('无效窗口');editable();const saved=store.commit(snapshot,version);event.returnValue={ok:true,snapshot:saved,backupError:store.backupError};broadcast();}catch(error){event.returnValue={ok:false,error:error.message,snapshot:store.snapshot()};}
@@ -166,8 +167,8 @@ function handlers(){
   });
   handle('toz:cloud',async(action,arg={})=>{
     if(!cloud)throw new Error('云同步不可用');
-    if(!['status','code','login','logout','sync','bind','resolve'].includes(action))throw new Error('未知账号操作');
-    const mutation=['login','bind','logout'].includes(action);
+    if(!['status','code','login','logout','sync','bind','resolve','avatar','reset-avatar'].includes(action))throw new Error('未知账号操作');
+    const mutation=['login','bind','logout','avatar','reset-avatar'].includes(action);
     if(mutation&&cloud.authBusy)throw new Error('账号操作进行中，请稍后重试');
     if(mutation)cloud.authBusy=true;
     try{
@@ -177,6 +178,19 @@ function handlers(){
     if(action==='logout'){const result=await cloud.logout();if(!smoke||entryReview)await returnToEntry();return result;}
     if(action==='sync')return cloud.sync();
     const owner=BrowserWindow.getFocusedWindow()||entryWindow||mainWindow;
+    if(action==='reset-avatar')return await cloud.avatar(null);
+    if(action==='avatar'){
+      if(!cloud.user)throw new Error('请先登录账号');
+      const userId=cloud.user.id;
+      const choice=await dialog.showOpenDialog(owner,{title:'选择账号头像',filters:[{name:'图片',extensions:['png','jpg','jpeg','webp']}],properties:['openFile']});
+      if(choice.canceled)return cloud.status();
+      if(cloud.user?.id!==userId)throw new Error('账号已变化，请重新选择头像');
+      const filename=choice.filePaths[0];if(fs.statSync(filename).size>5*1024*1024)throw new Error('请选择不超过 5 MB 的图片');
+      const image=nativeImage.createFromPath(filename);if(image.isEmpty())throw new Error('无法读取这张图片');
+      const {width,height}=image.getSize(),side=Math.min(width,height),square=image.crop({x:Math.floor((width-side)/2),y:Math.floor((height-side)/2),width:side,height:side}).resize({width:128,height:128}).toPNG();
+      if(square.length>100000)throw new Error('头像处理后过大，请换一张图片');
+      return await cloud.avatar('data:image/png;base64,'+square.toString('base64'));
+    }
     if(action==='login'){
       let importLocal=false;
       if(store.snapshot().tasks.length||store.snapshot().recurrences.length){
@@ -269,7 +283,7 @@ async function start(){
   app.on('will-quit',()=>{globalShortcut.unregisterAll();store.close();});
   if(cloudReview){
     try{
-      const result=entryReview?await require('./entry-ui-smoke.cjs')({getEntry:()=>entryWindow,getMain:()=>mainWindow,getWidget:()=>widgetWindow,getStore:()=>store,returnToEntry,cloud,cloudTestEnv,outputDirectory:path.dirname(smokeResult||'artifacts/entry-ui/result.json')}):await require('./cloud-ui-smoke.cjs')({openSettingsWindow,getSettings:()=>settingsWindow,getStore:()=>store,cloud,cloudTestEnv,outputDirectory:path.dirname(smokeResult||'artifacts/cloud-ui/result.json')});
+      const result=entryReview?await require('./entry-ui-smoke.cjs')({getEntry:()=>entryWindow,getMain:()=>mainWindow,getWidget:()=>widgetWindow,getStore:()=>store,returnToEntry,cloud,cloudTestEnv,outputDirectory:path.dirname(smokeResult||'artifacts/entry-ui/result.json')}):await require('./cloud-ui-smoke.cjs')({openSettingsWindow,getSettings:()=>settingsWindow,getMain:()=>mainWindow,getWidget:()=>widgetWindow,getStore:()=>store,cloud,cloudTestEnv,outputDirectory:path.dirname(smokeResult||'artifacts/cloud-ui/result.json')});
       const resultPath=smokeResult||'artifacts/cloud-ui/result.json';fs.mkdirSync(path.dirname(resultPath),{recursive:true});fs.writeFileSync(resultPath,JSON.stringify(result,null,2));
       cloudTestEnv.service.server.closeAllConnections();await new Promise(resolve=>cloudTestEnv.service.server.close(resolve));cloudTestEnv.service.close();app.exit(result.ok?0:1);
     }catch(error){console.error(error);app.exit(1);}return;

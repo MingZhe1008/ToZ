@@ -13,7 +13,7 @@ class Cloud {
     const token=this.seal(this.token),temporary=this.filename+'.tmp';
     fs.writeFileSync(temporary,JSON.stringify({user:this.user,token}),{mode:0o600});fs.renameSync(temporary,this.filename);
   }
-  status(){return {user:this.user,server:this.url,busy:!!this.running,error:this.lastError,lastSync:this.lastSync,conflicts:this.conflict?.names||[],phoneAvailable:false};}
+  status(){return {user:this.user,server:this.url,busy:!!this.running,pending:!!this.user&&!equal(documentOf(this.getStore().snapshot()),this.getStore().meta('cloudBase',null)),error:this.lastError,lastSync:this.lastSync,conflicts:this.conflict?.names||[],phoneAvailable:false};}
   async api(route,body,method){
     const res=await this.request(this.url+route,{method:method||(body?'POST':'GET'),headers:{'Content-Type':'application/json',...(this.token?{Authorization:'Bearer '+this.token}:{})},...(body?{body:JSON.stringify(body)}:{}),redirect:'error',signal:AbortSignal.timeout(25000)});
     const result=await res.json();if(!res.ok)throw Object.assign(new Error(result.error||'云服务暂时不可用'),{status:res.status});return result;
@@ -33,6 +33,11 @@ class Cloud {
     if(!this.user)throw new Error('请先登录');
     const result=await this.api('/auth/bind',{email,code});this.user=result.user;this.saveSession();return this.status();
   }
+  async avatar(avatar){
+    if(!this.user)throw new Error('请先登录账号');
+    if(this.running)await this.running;
+    const result=await this.api('/account/avatar',{avatar},'PUT');this.user=result.user;this.saveSession();return this.status();
+  }
   async logout(){
     if(this.running)throw new Error('正在同步，请稍后退出');
     try{await this.api('/auth/logout',{});}catch{/* Local logout remains available offline. */}
@@ -42,11 +47,12 @@ class Cloud {
     if(this.authBusy)return Promise.resolve(this.status());
     if(this.running)return this.running;
     if(!this.user)return Promise.resolve(this.status());
-    this.running=this.performSync(choice).catch(e=>{this.lastError=e.name==='TimeoutError'?'连接云服务超时，离线修改已保留':e instanceof TypeError?'无法连接云服务，离线修改已保留':e.message;return this.status();}).finally(()=>{this.busyWrite=false;this.running=null;this.notify();});
+    this.running=this.performSync(choice).catch(e=>{this.lastError=e.name==='TimeoutError'?'连接云服务超时，离线修改已保留':e instanceof TypeError?'无法连接云服务，离线修改已保留':e.message;return this.status();}).finally(()=>{this.busyWrite=false;this.running=null;this.notify();}).then(()=>this.status());
     this.notify();return this.running;
   }
   async performSync(choice){
     const remote=await this.api('/sync'),store=this.getStore(),snapshot=store.snapshot(),local=documentOf(snapshot),base=store.meta('cloudBase',null);
+    if(remote.user?.id===this.user.id&&!equal(remote.user,this.user)){this.user=remote.user;this.saveSession();}
     if(!Number.isSafeInteger(remote.version)||remote.version<0)throw new Error('云端版本格式无效');
     if(remote.document!==null)validateDocument(remote.document);
     if(choice&&(!this.conflict||remote.version!==this.conflict.remoteVersion||!equal(local,this.conflict.local)))throw new Error('数据已变化，请重新同步并确认冲突');

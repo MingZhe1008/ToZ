@@ -7,6 +7,7 @@ export function selectSettingsTab(tab='appearance',{focus=false}={}){
   });
   document.querySelectorAll('.settings-panel').forEach(panel=>panel.hidden=panel.id!==`settings-${selected}`);
   const body=document.querySelector('#settings-dialog .dialog-body');if(body)body.scrollTop=0;
+  document.dispatchEvent(new CustomEvent('toz:settings-tab',{detail:selected}));
 }
 export function mountDesktopSettings(toast,{setReading}={}){
   const dialog=document.querySelector('#settings-dialog');

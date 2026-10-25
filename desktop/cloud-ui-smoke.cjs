@@ -2,16 +2,16 @@ const fs=require('node:fs');
 const path=require('node:path');
 const assert=require('node:assert/strict');
 const {createTask}=require('../prototype/domain.mjs');
-module.exports=async({openSettingsWindow,getSettings,getStore,cloud,cloudTestEnv,outputDirectory})=>{
+module.exports=async({openSettingsWindow,getSettings,getMain,getWidget,getStore,cloud,cloudTestEnv,outputDirectory})=>{
   const guest=getStore().snapshot();guest.tasks.push(createTask('原离线任务','2026-10-25','ToZ','','2026-10-25'));getStore().commit(guest,guest.version);
   fs.mkdirSync(outputDirectory,{recursive:true});await openSettingsWindow('account');
-  const window=getSettings(),errors=[];window.webContents.on('console-message',(_event,...args)=>{if(args[0]===3)errors.push(String(args[1]));});
+  let window=getSettings();const errors=[];window.webContents.on('console-message',(_event,...args)=>{if(args[0]===3)errors.push(String(args[1]));});
   const js=code=>window.webContents.executeJavaScript(code,true);
   const wait=async(code)=>{for(let i=0;i<100;i++){if(await js(code))return;await new Promise(r=>setTimeout(r,100));}throw new Error('界面等待超时：'+code);};
   await wait("!document.querySelector('#settings-account').hidden && !document.querySelector('#cloud-controls').hidden");
   assert.equal(await js("document.querySelectorAll('[data-settings-tab]').length"),5);
   assert.equal(await js("document.querySelector('#cloud-login-form').hidden"),false);
-  await fs.promises.writeFile(path.join(outputDirectory,'login.png'),(await window.webContents.capturePage()).toPNG());
+  await new Promise(resolve=>setTimeout(resolve,150));await fs.promises.writeFile(path.join(outputDirectory,'login.png'),(await window.webContents.capturePage()).toPNG());
   await js("document.querySelector('#cloud-login-form').elements.email.value='ui@example.com';document.querySelector('[data-cloud-code=login]').click()");
   for(let i=0;i<100&&!cloudTestEnv.mail.has('ui@example.com');i++)await new Promise(r=>setTimeout(r,50));
   const code=cloudTestEnv.mail.get('ui@example.com');assert(code);
@@ -24,6 +24,41 @@ module.exports=async({openSettingsWindow,getSettings,getStore,cloud,cloudTestEnv
   dialog.showMessageBox=originalConfirmation;assert(confirmedImport);await cloud.sync();
   assert.equal(getStore().snapshot().tasks[0].title,'原离线任务');
   assert(cloud.user);assert.notEqual(getStore().directory,path.dirname(getStore().directory));
+  const mainJS=code=>getMain().webContents.executeJavaScript(code,true);
+  assert.equal(await mainJS("document.querySelector('.local-pill').textContent"),'已登录');
+  assert.match(await mainJS("document.querySelector('#save-status').textContent"),/云端已同步/);
+  assert.equal(await mainJS("document.querySelectorAll('.sidebar-footer-actions [data-action=settings],.sidebar-footer-actions [data-action=trash]').length"),0);
+  const originalPicker=dialog.showOpenDialog;
+  dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path.resolve(__dirname,'../build/icon.png')]});
+  try{
+    await mainJS("document.querySelector('#account-launcher').click();document.querySelector('[data-account-command=avatar]').click()");
+    for(let i=0;i<100&&!cloud.user.avatar;i++)await new Promise(resolve=>setTimeout(resolve,50));
+    assert(cloud.user.avatar?.startsWith('data:image/png;base64,'));
+  }finally{dialog.showOpenDialog=originalPicker;}
+  await cloud.sync();
+  assert.equal(await mainJS("!!document.querySelector('#account-launcher .account-avatar img')"),true);
+  const {Store}=require('./store.cjs'),{Cloud}=require('./cloud.cjs'),peerStore=new Store(path.join(cloud.directory,'avatar-peer'));
+  try{
+    const peer=new Cloud({directory:peerStore.directory,getStore:()=>peerStore,switchProfile:()=>{},seal:v=>'test:'+v,unseal:v=>v.slice(5),url:cloudTestEnv.url});
+    peer.user={...cloud.user,avatar:null};peer.token=cloud.token;await peer.sync();assert.equal(peer.user.avatar,cloud.user.avatar);
+  }finally{peerStore.close();}
+  await mainJS("(()=>{const s=window.toz.read().snapshot;s.tasks[0].note='验证保存后待同步';return window.toz.commit(s,s.version);})()");
+  assert.match(await mainJS("document.querySelector('#save-status').textContent"),/待同步/);
+  const realRequest=cloud.request;cloud.request=async()=>{throw new Error('隔离网络异常');};await cloud.sync();
+  assert.match(await mainJS("document.querySelector('#save-status').textContent"),/同步待处理/);
+  cloud.request=realRequest;const completed=await cloud.sync();assert.equal(completed.busy,false);
+  assert.match(await mainJS("document.querySelector('#save-status').textContent"),/云端已同步/);
+  await mainJS("document.querySelector('#save-status').classList.add('error');document.querySelector('#save-status').textContent='保存失败 · 请导出数据'");await cloud.sync();
+  assert.match(await mainJS("document.querySelector('#save-status').textContent"),/保存失败/);
+  await mainJS("document.querySelector('#save-status').classList.remove('error')");await cloud.sync();
+  const {app}=require('electron');
+  const firstReady=new Promise(resolve=>app.once('browser-window-created',(_event,created)=>created.webContents.once('dom-ready',()=>resolve(created.webContents.executeJavaScript("({email:document.querySelector('#cloud-account-name').textContent,loginHidden:document.querySelector('#cloud-login-form').hidden,signedVisible:!document.querySelector('#cloud-signed-in').hidden})")))));
+  window.destroy();await openSettingsWindow('account');window=getSettings();const firstState=await Promise.race([firstReady,new Promise((_,reject)=>setTimeout(()=>reject(new Error('账号首帧检查超时')),5000))]);
+  assert.equal(firstState.email,'ui@example.com');assert.equal(firstState.loginHidden,true);assert.equal(firstState.signedVisible,true);
+  await new Promise(resolve=>setTimeout(resolve,150));
+  fs.writeFileSync(path.join(outputDirectory,'account-first-frame.png'),(await window.webContents.capturePage()).toPNG());
+  getMain().show();await new Promise(resolve=>setTimeout(resolve,150));fs.writeFileSync(path.join(outputDirectory,'sidebar-synced.png'),(await getMain().webContents.capturePage()).toPNG());
+  await mainJS("document.querySelector('#account-launcher').click()");await new Promise(resolve=>setTimeout(resolve,100));fs.writeFileSync(path.join(outputDirectory,'account-menu.png'),(await getMain().webContents.capturePage()).toPNG());await mainJS("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
   const snapshot=getStore().snapshot();snapshot.tasks.push(createTask('账号隔离检查','2026-10-25','ToZ','','2026-10-25'));getStore().commit(snapshot,snapshot.version);await cloud.sync();
   await wait("!document.querySelector('#cloud-logout').disabled");
   await fs.promises.writeFile(path.join(outputDirectory,'signed-in.png'),(await window.webContents.capturePage()).toPNG());
@@ -31,5 +66,6 @@ module.exports=async({openSettingsWindow,getSettings,getStore,cloud,cloudTestEnv
   await js("document.querySelector('#cloud-logout').click()");await wait("!document.querySelector('#cloud-login-form').hidden");assert.equal(getStore().snapshot().tasks.length,1);assert.equal(getStore().snapshot().tasks[0].title,'原离线任务');
   await js("document.documentElement.dataset.theme='light'");
   await fs.promises.writeFile(path.join(outputDirectory,'login-light.png'),(await window.webContents.capturePage()).toPNG());
-  return {ok:errors.length===0,errors,checks:['五类设置与账号页','获取验证码及表单登录','首次确认复制离线数据','账号独立数据库','同步上传','Windows 加密会话','退出后恢复原离线数据','深浅色截图'],realEmailSent:false};
+  assert.equal(await mainJS("document.querySelector('.local-pill').textContent"),'离线');
+  return {ok:errors.length===0,errors,checks:['五类设置与账号页','获取验证码及表单登录','首次确认复制离线数据','账号独立数据库','同步上传','Windows 加密会话','退出后恢复原离线数据','侧栏已登录及离线标识','本机保存与待同步、已同步、异常区分','同步提示不覆盖本机保存错误','账号页首帧即显示已登录','账号入口替换设置及回收站图标','选择图片并上传头像','头像同步到第二个客户端','账号菜单及键盘关闭','深浅色截图'],realEmailSent:false};
 };

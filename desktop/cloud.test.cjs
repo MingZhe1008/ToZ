@@ -17,6 +17,13 @@ function fixture(t){
 }
 function task(title='任务'){return createTask(title,'2026-10-25','ToZ','','2026-10-25');}
 function doc(){return {schema:1,tasks:[task('A'),task('B')],projects:['ToZ'],recurrences:[],projectColors:{},projectTrash:[]};}
+test('旧账号表增加头像列后保留账号且默认无头像',t=>{
+  const {root,cleanups}=fixture(t),directory=path.join(root,'legacy-server');fs.mkdirSync(directory,{recursive:true});
+  const {DatabaseSync}=require('node:sqlite'),old=new DatabaseSync(path.join(directory,'sync.sqlite'));
+  old.exec("CREATE TABLE users(id TEXT PRIMARY KEY,created INTEGER NOT NULL);INSERT INTO users VALUES('legacy-user',123)");old.close();
+  const service=createService({directory,pepper:'legacy-test-secret-'.repeat(3),sendMail:async()=>{}});cleanups.push(()=>service.close());
+  assert.deepEqual({...service.db.prepare('SELECT * FROM users').get()},{id:'legacy-user',created:123,avatar:null});
+});
 test('不同任务并发修改合并；同一任务冲突保留双方，选择仅作用于冲突项',()=>{
   const base=doc(),a=structuredClone(base),b=structuredClone(base);a.tasks[0].title='A 本机';b.tasks[1].title='B 云端';
   let result=mergeDocuments(base,a,b);assert.equal(result.conflicts.length,0);assert.deepEqual(result.document.tasks.map(t=>t.title),['A 本机','B 云端']);
@@ -85,6 +92,9 @@ test('服务端账号隔离、版本 CAS 与非法数据拒绝',async t=>{
   assert.equal((await api('/sync',null,b.token)).data.document,null);
   assert.equal((await api('/sync',{version:1,document:{...document,tasks:[{}]}},a.token,'PUT')).status,400);
   assert.equal((await api('/sync',null,a.token)).data.version,1);
+  assert.equal((await api('/account/avatar',{avatar:null},null,'PUT')).status,401);
+  assert.equal((await api('/account/avatar',{avatar:'data:image/svg+xml,<svg/>'},a.token,'PUT')).status,400);
+  assert.equal((await api('/account/avatar',{avatar:null},a.token,'PUT')).data.user.avatar,null);
 });
 test('两台电脑同步、离线编辑、冲突选择、过期确认拒绝及网络错误保留数据',async t=>{
   const {root,makeStore,url,login}=await service(t),account=await login('sync@example.com');

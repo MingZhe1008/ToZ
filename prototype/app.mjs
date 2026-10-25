@@ -13,6 +13,10 @@ import { TODAY, uid, seedTasks, createTask, reschedule, startTask, toggleDone, d
 import { monthDays, shiftMonth, tasksByDate, dayPreview, calendarWeeks, calendarTaskRange } from './calendar.mjs';
 import { mountDatePickers, syncDatePickers, closeDatePickers } from './date-picker.mjs';
 import { mountDesktopSettings, refreshDesktopSettings, selectSettingsTab } from './desktop-ui.mjs';
+import {refreshCloudChrome} from './cloud-ui.mjs';
+
+document.addEventListener('toz:account-open',event=>openSettings(event.detail==='account'?'account':'appearance'));
+document.addEventListener('toz:account-feedback',event=>toast(event.detail));
 
 const $ = selector => document.querySelector(selector);
 const icons = {
@@ -112,7 +116,7 @@ function save() {
     }
     projectRenames={};saveError = '';
     $('#save-status').classList.remove('error');
-    $('#save-status').innerHTML = '<span class="live-dot"></span>已保存在本机';
+    refreshCloudChrome();
     return true;
   } catch(error) {
     saveError = native ? error.message : '本地保存失败，当前更改仅在内存中。请导出 JSON 保留数据。';
@@ -273,10 +277,10 @@ function renderWidget() {
   const listScrollTop=$('#widget .widget-list')?.scrollTop||0;
   const daily=widgetTasks(),active=daily.filter(t=>!t.done),done=daily.filter(t=>t.done).length;
   $('#widget').classList.toggle('collapsed',collapsed);
-  $('#widget').innerHTML=`<div class="widget-header" title="${native?'拖动移动；双击展开或收缩':'拖动可在预览画布中移动'}"><div class="widget-title">${svg('sun')}今天</div><div class="widget-mini" id="widget-mini"></div><div class="widget-tools"><button class="icon-button" data-action="widget-menu" aria-label="浮窗选项" aria-haspopup="menu">${svg('more')}</button><button class="icon-button" data-action="collapse" aria-label="${collapsed?'展开':'折叠'}浮窗" aria-expanded="${!collapsed}">${svg(collapsed?'expand':'collapse')}</button></div></div><div class="widget-content"><div class="widget-date" title="${esc(dateText(TODAY))}">${displayDate(TODAY)}</div><div class="widget-project-filter"><select id="widget-project" aria-label="悬浮窗分区筛选"><option value="">全部分区</option>${shownProjects().map(name=>`<option value="${esc(name)}" ${prefs.widgetProject===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="widget-filter-count">${active.length} 项待办</span></div><div class="widget-progress"><div><span>${done} / ${daily.length} 已完成</span></div></div><div class="widget-list">${active.map(t=>taskRow(t,true)).join('')||`<div class="empty-state">${svg('checkCircle')}今天已安排妥当。</div>`}</div><div class="widget-footer"><button class="widget-add" data-action="new">${svg('plus')}添加待办<kbd>N</kbd></button></div><div class="widget-bottom-label"><span>${svg('shield')}${saveError?'保存异常 · 请导出':'已保存在本机'}</span><span>${pinned?'窗口已置顶':'窗口未置顶'}</span></div></div>`;
+  $('#widget').innerHTML=`<div class="widget-header" title="${native?'拖动移动；双击展开或收缩':'拖动可在预览画布中移动'}"><div class="widget-title">${svg('sun')}今天</div><div class="widget-mini" id="widget-mini"></div><div class="widget-tools"><button class="icon-button" data-action="widget-menu" aria-label="浮窗选项" aria-haspopup="menu">${svg('more')}</button><button class="icon-button" data-action="collapse" aria-label="${collapsed?'展开':'折叠'}浮窗" aria-expanded="${!collapsed}">${svg(collapsed?'expand':'collapse')}</button></div></div><div class="widget-content"><div class="widget-date" title="${esc(dateText(TODAY))}">${displayDate(TODAY)}</div><div class="widget-project-filter"><select id="widget-project" aria-label="悬浮窗分区筛选"><option value="">全部分区</option>${shownProjects().map(name=>`<option value="${esc(name)}" ${prefs.widgetProject===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="widget-filter-count">${active.length} 项待办</span></div><div class="widget-progress"><div><span>${done} / ${daily.length} 已完成</span></div></div><div class="widget-list">${active.map(t=>taskRow(t,true)).join('')||`<div class="empty-state">${svg('checkCircle')}今天已安排妥当。</div>`}</div><div class="widget-footer"><button class="widget-add" data-action="new">${svg('plus')}添加待办<kbd>N</kbd></button></div><div class="widget-bottom-label"><span>${svg('shield')}<span data-cloud-save-label ${saveError?'data-save-error="true"':''}>${saveError?'保存异常 · 请导出':''}</span></span><span>${pinned?'窗口已置顶':'窗口未置顶'}</span></div></div>`;
   $('#widget .widget-list').scrollTop=listScrollTop;renderMiniWidget();
 }
-function render() { contextMenu?.close();const toggle=$('.desktop-titlebar [data-action="toggle-widget"]');toggle.setAttribute('aria-pressed',String(widgetVisible));toggle.setAttribute('aria-label',widgetVisible?'隐藏悬浮框':'显示悬浮框');applyAppearance(); renderList(); renderDetail(); renderWidget(); refreshNativeDates(); }
+function render() { contextMenu?.close();const toggle=$('.desktop-titlebar [data-action="toggle-widget"]');toggle.setAttribute('aria-pressed',String(widgetVisible));toggle.setAttribute('aria-label',widgetVisible?'隐藏悬浮框':'显示悬浮框');applyAppearance(); renderList(); renderDetail(); renderWidget(); refreshNativeDates(); refreshCloudChrome(); }
 function applyAppearance(){
   document.documentElement.dataset.theme=dark?'dark':'light';
   document.documentElement.style.colorScheme=dark?'dark':'light';

@@ -22,6 +22,7 @@ function createService({directory,pepper,sendMail,trustProxy=false,now=Date.now}
     CREATE TABLE IF NOT EXISTS documents(user_id TEXT PRIMARY KEY,version INTEGER NOT NULL,data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS revisions(user_id TEXT NOT NULL,version INTEGER NOT NULL,data TEXT NOT NULL,created INTEGER NOT NULL,PRIMARY KEY(user_id,version));
     CREATE TABLE IF NOT EXISTS limits(key TEXT PRIMARY KEY,count INTEGER NOT NULL,expires INTEGER NOT NULL);`);
+  if(!db.prepare('PRAGMA table_info(users)').all().some(column=>column.name==='avatar'))db.exec('ALTER TABLE users ADD COLUMN avatar TEXT');
   const digest=(email,purpose,owner,code)=>crypto.createHmac('sha256',pepper).update(JSON.stringify([email,purpose,owner,code])).digest('hex');
   function limit(key,max,duration){
     const row=db.prepare('SELECT * FROM limits WHERE key=?').get(key),time=now();
@@ -35,6 +36,7 @@ function createService({directory,pepper,sendMail,trustProxy=false,now=Date.now}
     return session;
   }
   const identities=userId=>db.prepare('SELECT kind,address FROM identities WHERE user_id=? ORDER BY address').all(userId);
+  const userOf=id=>({id,identities:identities(id),avatar:db.prepare('SELECT avatar FROM users WHERE id=?').get(id)?.avatar||null});
   async function route(req,body){
     const url=new URL(req.url,'http://localhost');
     const ip=trustProxy?(req.headers['x-real-ip']||req.socket.remoteAddress):req.socket.remoteAddress;
@@ -63,20 +65,30 @@ function createService({directory,pepper,sendMail,trustProxy=false,now=Date.now}
         const existing=db.prepare('SELECT user_id FROM identities WHERE kind=? AND address=?').get('email',email);
         if(owner&&existing&&existing.user_id!==owner)throw failure(409,'该邮箱已属于其他账号，不能直接绑定');
         const id=owner||existing?.user_id||crypto.randomUUID();
-        db.prepare('INSERT OR IGNORE INTO users VALUES(?,?)').run(id,now());
+        db.prepare('INSERT OR IGNORE INTO users(id,created) VALUES(?,?)').run(id,now());
         db.prepare('INSERT OR IGNORE INTO identities VALUES(?,?,?)').run('email',email,id);
         db.prepare('DELETE FROM codes WHERE email=? AND purpose=? AND owner=?').run(email,purpose,owner);
         let token;
         if(!owner){token=crypto.randomBytes(32).toString('hex');db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(hash(token),id,now()+30*86400000);}
-        db.exec('COMMIT');return {user:{id,identities:identities(id)},...(token?{token}:{})};
+        db.exec('COMMIT');return {user:userOf(id),...(token?{token}:{})};
       }catch(e){db.exec('ROLLBACK');throw e;}
     }
     const session=auth(req),id=session.user_id;
-    if(req.method==='GET'&&url.pathname==='/account')return {user:{id,identities:identities(id)}};
+    if(req.method==='GET'&&url.pathname==='/account')return {user:userOf(id)};
+    if(req.method==='PUT'&&url.pathname==='/account/avatar'){
+      limit('avatar:'+id,30,3600000);
+      const avatar=body.avatar;
+      if(avatar!==null){
+        if(typeof avatar!=='string'||avatar.length>140000||!/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(avatar))throw failure(400,'头像格式无效');
+        const data=Buffer.from(avatar.slice(22),'base64');
+        if(data.length<33||data.length>100000||data.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'||data.toString('ascii',12,16)!=='IHDR'||data.readUInt32BE(16)!==128||data.readUInt32BE(20)!==128)throw failure(400,'头像须为 128×128 PNG 图片');
+      }
+      db.prepare('UPDATE users SET avatar=? WHERE id=?').run(avatar,id);return {user:userOf(id)};
+    }
     if(req.method==='POST'&&url.pathname==='/auth/logout'){db.prepare('DELETE FROM sessions WHERE digest=?').run(session.digest);return {ok:true};}
     if(req.method==='GET'&&url.pathname==='/sync'){
       const row=db.prepare('SELECT * FROM documents WHERE user_id=?').get(id);
-      return row?{version:row.version,document:JSON.parse(row.data)}:{version:0,document:null};
+      return {...(row?{version:row.version,document:JSON.parse(row.data)}:{version:0,document:null}),user:userOf(id)};
     }
     if(req.method==='PUT'&&url.pathname==='/sync'){
       if(!Number.isSafeInteger(body.version)||body.version<0)throw failure(400,'同步版本无效');
