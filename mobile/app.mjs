@@ -44,7 +44,7 @@ const observer=new MutationObserver(()=>{
 observer.observe($('.sidebar'),{attributes:true,subtree:true,attributeFilter:['class']});
 // Desktop settings markup is shared, with unavailable system controls removed.
 $('[data-settings-tab="startup"]').hidden=true;
-$('#native-version').textContent='ToZ 1.1.5-android.1 · Android';
+$('#native-version').textContent='ToZ 1.1.5-android.2 · Android';
 $('#native-data-path').textContent='应用私有目录 · SQLite · 按账号隔离';
 $('.data-storage-description').textContent='任务先保存在本机 SQLite；登录后与 Windows 及其他安卓设备同步。';
 $('.data-backup-description').textContent='每日最新快照保留十四份；卸载会移除本机数据，请先导出。';
