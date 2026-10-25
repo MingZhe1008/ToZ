@@ -21,6 +21,7 @@ description: 在 ToZ 项目的新会话开始开发或继续开发时，读取�
 
 | 任务 | 补读文档 | 实现入口（相对仓库根目录） |
 | --- | --- | --- |
+| 正式网页版、浏览器存储、腾讯云网页发布 | [网页版使用与部署说明](../../../docs/网页版使用与部署说明.md)、云同步部署说明、需求第 30 节、视觉规范 | `web/`、`scripts/build-web.mjs`、`scripts/activate-web.sh`、`sync-server/deploy/nginx.conf`；共用 Store / Cloud 和原型业务界面 |
 | Android 手机 / 平板、APK、移动端同步与布局 | [Android 安装与开发说明](../../../docs/Android安装与开发说明.md)、需求第 29 节、视觉规范、云同步部署说明 | `android/`、`mobile/`、`scripts/prepare-android.mjs`、`scripts/build-android.mjs`；共用 `prototype/` 和 `desktop/store.cjs` / `cloud.cjs` |
 | 任务日期、延期、完成、子任务 | 开发需求中的日期规则、核心流程、数据结构及最新补充 | `prototype/domain.mjs`、`prototype/lifecycle.mjs`、`prototype/app.mjs` 及对应测试 |
 | 周期任务、农历、跨日安排 | 开发需求和安装说明中的周期、农历、日期区间部分 | `prototype/recurrence.mjs`、`prototype/lunar.mjs`、`prototype/calendar.mjs`、`prototype/gantt.mjs` |
@@ -33,7 +34,7 @@ description: 在 ToZ 项目的新会话开始开发或继续开发时，读取�
 
 ## 开发时持续保留的项目约束
 
-- Windows 产品是离线 Electron 客户端与透明浮窗；Android 已加入原生 WebView / SQLite 移植工程及手机 / 平板适配，真机验收边界见现状与安卓说明。浏览器原型另用 localStorage。iOS 是预留方向，不能描述为已交付。
+- Windows 产品是离线 Electron 客户端与透明浮窗；Android 已加入原生 WebView / SQLite 移植工程及手机 / 平板适配。正式网页版共用 Store / Cloud，以 sql.js / localStorage 快照保存，真实日期、账号同步及腾讯云 `/toz` 静态入口；浏览器原型仍固定演示日期且不登录，两者不可混淆。设备与浏览器验证边界见对应说明。iOS 是预留方向，不能描述为已交付。
 - 首次实际开始、最初计划和延期历史有专门约束；计划开始可调整，勿与首次实际开始混淆。普通编辑维持历史只追加；明确的回收站永久删除走独立事务与确认流程。
 - 沿用现有 macOS 风格、中性灰选中与控件、多彩分区标记和绿色完成状态。实际默认主题、版本及行为以当前代码和最新说明为准，不能沿用旧章节的浅色或蓝色方案。
 - 已安装应用可能包含真实数据。验证用仓库内 `.runtime/` 的独立目录，不覆盖正式 `%APPDATA%\ToZ` 数据、启动项或运行安装器替换正式应用来做验收。

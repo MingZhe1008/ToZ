@@ -295,7 +295,7 @@ async function setReadingPreference(key,value){
   applyAppearance();
 }
 async function openSettings(tab='appearance'){
-  if(native&&native.platform!=='android'&&native.surface!=='settings'){await nativeCommand('open-settings',{tab});return;}
+  if(native&&!['android','web'].includes(native.platform)&&native.surface!=='settings'){await nativeCommand('open-settings',{tab});return;}
   if(native)await refreshDesktopSettings();selectSettingsTab(tab,{focus:native?.surface==='settings'});
   if(native?.surface!=='settings')openDialog('#settings-dialog');
 }
@@ -541,7 +541,7 @@ if(native){
   reportRenderer();
   native.onProfile(snapshot=>{
     document.querySelectorAll('dialog[open]:not(#settings-dialog)').forEach(dialog=>dialog.close());selected=null;view='today';
-    if(native.platform==='android'&&snapshot){
+    if(['android','web'].includes(native.platform)&&snapshot){
       query='';beforeGlobalSearch=null;calendarDetailOpen=false;projectRenames={};editingTask=null;editingProject=null;subtaskEdit=null;pendingPurge=null;
       expandedSubtasks.clear();expandedWidgetSubtasks.clear();expandedTaskSeries.clear();
       $('#global-search').value='';$('#task-search').value='';applySnapshot(snapshot);ensureRecurrences();
