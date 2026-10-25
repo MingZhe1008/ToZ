@@ -1,0 +1,40 @@
+const {app,BrowserWindow,protocol,net}=require('electron');
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const {pathToFileURL}=require('node:url');
+const root=path.resolve(__dirname,'..'),assets=path.join(root,'android/app/src/main/assets/app');
+const directory=path.join(root,'.runtime/android-account-ui-'+Date.now()),output=path.join(root,'artifacts/android-account-ui');
+fs.mkdirSync(directory,{recursive:true});fs.mkdirSync(output,{recursive:true});
+process.env.TOZ_ANDROID_TEST_DIR=directory;process.env.TOZ_ANDROID_ACCOUNT_TEST='1';app.setPath('userData',path.join(directory,'electron'));
+protocol.registerSchemesAsPrivileged([{scheme:'toz',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
+app.whenReady().then(async()=>{
+  let win;const checks=[],errors=[];
+  try{
+    protocol.handle('toz',request=>net.fetch(pathToFileURL(path.join(assets,new URL(request.url).pathname)).href));
+    win=new BrowserWindow({width:390,height:844,show:false,webPreferences:{preload:path.join(__dirname,'test-preload.cjs'),contextIsolation:false,nodeIntegration:false,sandbox:false,offscreen:true,backgroundThrottling:false}});
+    win.webContents.on('console-message',event=>{if(event.level==='error')errors.push(event.message);});
+    const js=code=>win.webContents.executeJavaScript(code,true),check=(name,value)=>{assert.ok(value,name);checks.push(name);};
+    const wait=async code=>{for(let i=0;i<80;i++){if(await js(code))return;await new Promise(resolve=>setTimeout(resolve,50));}throw new Error('Timed out: '+code);};
+    await win.loadURL('toz://app/index.html');await wait('!!document.querySelector(".mobile-header")');
+    await js(`(()=>{window.accountPageSentinel='same-page';document.querySelector('.toolbar-add').click();const f=document.querySelector('#new-form');f.elements.title.value='独立离线任务';f.requestSubmit();})()`);
+    await wait('window.toz.read().snapshot.tasks.length===1');
+    await js(`(()=>{window.toz.configure({largeText:true});window.toz.configure({largeText:false});document.querySelector('#mobile-settings').click();document.querySelector('[data-settings-tab=account]').click();const f=document.querySelector('#cloud-login-form');f.elements.email.value='android-ui@example.com';f.elements.code.value='123456';f.requestSubmit();})()`);
+    await wait('!!document.querySelector("#login-data-choice")?.open');
+    await js(`document.querySelector('#login-data-choice input[value=keep]').click();document.querySelector('[data-choice-continue]').click();`);
+    await wait('window.toz.read().ok && window.toz.read().snapshot.tasks.some(t=>t.id==="remote-account-task") && !document.querySelector("#cloud-sync-now").disabled');
+    check('login automatically downloads remote tasks without page reload',await js('window.accountPageSentinel==="same-page" && window.tozMockCloud.gets>0'));
+    check('account page shows signed-in controls',await js('document.querySelector("#cloud-login-form").hidden && !document.querySelector("#cloud-signed-in").hidden'));
+    await js('document.querySelector("#cloud-sync-now").click()');await wait('!document.querySelector("#cloud-sync-now").disabled');
+    check('manual sync works immediately after login',await js('window.toz.read().ok && !document.querySelector("#cloud-error").textContent'));
+    await js('window.tozMobileBack();document.querySelector("[data-mobile-view=all]").click()');
+    check('renderer replaced higher offline version with lower account version',await js('document.querySelector("#task-list").textContent.includes("电脑同步到手机的任务") && !document.querySelector("#task-list").textContent.includes("独立离线任务")'));
+    await js('document.querySelector("#mobile-settings").click();document.querySelector("[data-settings-tab=account]").click();window.tozMockCloud.fail=true;document.querySelector("#cloud-sync-now").click()');
+    await wait('!document.querySelector("#cloud-sync-now").disabled && document.querySelector("#cloud-error").textContent.includes("模拟断网")');
+    check('sync error does not leave profile switching locked',await js('window.toz.read().ok'));
+    await js('window.tozMockCloud.fail=false;document.querySelector("#cloud-sync-now").click()');await wait('!document.querySelector("#cloud-sync-now").disabled && !document.querySelector("#cloud-error").textContent');
+    check('manual retry recovers after connection error',await js('!window.toz.cloudStatus().error'));
+    await js('document.querySelector("#cloud-logout").click()');await wait('!window.toz.cloudStatus().user && window.toz.read().ok && !document.querySelector("#cloud-login-form").hidden');
+    check('logout restores separate offline tasks and unlocks account controls',await js('window.toz.read().snapshot.tasks[0].title==="独立离线任务" && window.accountPageSentinel==="same-page"'));
+    check('no renderer console errors',errors.length===0);
+    fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({ok:true,checks,errors},null,2));console.log(JSON.stringify({ok:true,checks},null,2));win.destroy();app.exit(0);
+  }catch(error){fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({ok:false,checks,errors,error:error.stack},null,2));console.error(error);if(win)win.destroy();app.exit(1);}
+});

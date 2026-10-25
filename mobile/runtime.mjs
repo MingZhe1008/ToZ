@@ -20,11 +20,12 @@ function switchProfile(id,copy){
   const directory=id?'profiles/'+id:'offline';
   const previous=store;
   const next=new Store(directory);
-  if(copy&&next.snapshot().version===0&&previous)next.restore(previous.snapshot());
+  try{if(copy&&next.snapshot().version===0&&previous)next.restore(previous.snapshot());}catch(error){next.close();throw error;}
   store=next;
   if(previous)previous.close();
-  // Profile versions are independent. Reload prevents old drafts / counters crossing accounts.
-  if(previous&&!initializing){stopped=true;emit('profile');setTimeout(()=>location.reload(),0);}
+  // Release this lock and replace the renderer snapshot once the auth operation settles.
+  // A WebView navigation can be blocked; account switching must not depend on reload.
+  if(previous&&!initializing)stopped=true;
 }
 function guarded(fn){try{return {ok:true,...fn()};}catch(error){return {ok:false,error:error.message,...(store?{snapshot:store.snapshot()}:{})};}}
 function initialize(){
@@ -42,7 +43,7 @@ window.toz={
   read:()=>guarded(()=>{ready();return {snapshot:store.snapshot()};}),
   commit:(input,version)=>guarded(()=>{ready();if(cloud.busyWrite)throw new Error('正在应用同步，请稍后保存');const snapshot=store.commit(input,version);emit('cloud',cloud.status());return {snapshot,backupError:store.backupError};}),
   purge:(input,version)=>guarded(()=>{ready();if(cloud.busyWrite)throw new Error('正在同步，请稍后删除');return store.purge(input,version);}),
-  settings:async()=>{ready();return {...store.settings(),version:'1.1.5-android.2',dataPath:'应用私有 SQLite（按账号隔离）'};},
+  settings:async()=>{ready();return {...store.settings(),version:'1.1.5-android.3',dataPath:'应用私有 SQLite（按账号隔离）'};},
   configure:async patch=>{ready();const result=store.updateSettings(patch);broadcast();return result;},
   cloudStatus:()=>cloud?.status()||{user:null,error:startupError?.message},
   cloud:async(action,args={})=>{
@@ -59,16 +60,21 @@ window.toz={
     }
     cloud.authBusy=true;
     try{
-      let result;
-      if(action==='login')result=await cloud.login(args.email,args.code,args.localDataChoice==='copy');
-      else if(action==='logout')result=await cloud.logout();
-      else if(action==='bind')result=await cloud.bind(args.email,args.code);
-      else if(action==='nickname')result=await cloud.nickname(args.nickname);
-      else if(action==='reset-avatar')result=await cloud.avatar(null);
-      else if(action==='avatar'){const avatar=await chooseAvatar();result=avatar?await cloud.avatar(avatar):cloud.status();}
+      if(action==='login')await cloud.login(args.email,args.code,args.localDataChoice==='copy');
+      else if(action==='logout')await cloud.logout();
+      else if(action==='bind')await cloud.bind(args.email,args.code);
+      else if(action==='nickname')await cloud.nickname(args.nickname);
+      else if(action==='reset-avatar')await cloud.avatar(null);
+      else if(action==='avatar'){const avatar=await chooseAvatar();if(avatar)await cloud.avatar(avatar);}
       else throw new Error('未知的账号操作');
-      emit('cloud',cloud.status());return result;
-    }finally{cloud.authBusy=false;}
+    }finally{
+      cloud.authBusy=false;
+      if(stopped){stopped=false;emit('profile',store.snapshot());}
+      broadcast();
+    }
+    // Cloud.login's internal attempt is intentionally skipped while authBusy is set.
+    // Start the first real sync only after the profile and renderer have been replaced.
+    return action==='login'?await cloud.sync():cloud.status();
   },
   command:async(name,args)=>{
     ready();

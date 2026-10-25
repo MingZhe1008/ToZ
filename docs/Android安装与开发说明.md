@@ -1,12 +1,13 @@
 # ToZ Android 手机与平板版
 
-基线：Windows 共用业务版本 v1.1.5；Android `1.1.5-android.2`，2026-10-25。开发分支为 `develop`。这是首版安卓移植，采用原生 Android Activity / WebView、应用内打包的界面资源及安卓 SQLite，不需要运行电脑端或访问网页才能离线使用。
+基线：Windows 共用业务版本 v1.1.5；Android `1.1.5-android.3`，2026-10-25。开发分支为 `develop`。这是首版安卓移植，采用原生 Android Activity / WebView、应用内打包的界面资源及安卓 SQLite，不需要运行电脑端或访问网页才能离线使用。
 
 ## 安装与使用
 
+- `android.3` 修正登录后一直提示“正在切换账号”及首次自动同步被跳过：账号切换改为原地替换本机副本与界面快照，关闭旧编辑弹层、清除旧搜索 / 草稿状态，并在解除账号操作互斥后自动同步；不依赖 WebView 页面重载。失败仍允许离线编辑及手动重试，退出后恢复独立离线副本。当前覆盖安装版本号为 10107。
 - `android.2` 修正状态栏覆盖顶部菜单 / 设置：由 WebView 外层的原生 FrameLayout 统一避让系统栏、刘海及输入法，网页使用避让后的实际尺寸；已处理的 Insets 清零后再传入 WebView，避免重复留白。覆盖安装使用递增版本号 10106，保留原有应用数据。手机上的最终点击效果仍需安装新版后复核。
 - 最低 Android 10（API 29），手机和平板通用，不锁定屏幕方向。Android System WebView 需更新到 Chromium 105 或以上；旧 WebView 未验收。
-- 本地构建生成 `dist/ToZ-1.1.5-android.2-debug.apk`。此文件为调试签名的测试安装包，不是应用商店发行包。正式发行签名与商店发布尚未配置，不提交私钥。
+- 本地构建生成 `dist/ToZ-1.1.5-android.3-debug.apk`。此文件为调试签名的测试安装包，不是应用商店发行包。正式发行签名与商店发布尚未配置，不提交私钥。
 - 首次启动直接进入空的离线清单；手机底部提供今天、日历、全部和添加待办，左上导航提供分区、即将到来、甘特图、延期和完成记录。平板窄屏为侧栏加内容，宽屏为侧栏、列表及详情三栏。
 - 点击任务进入详情；手机返回键先关闭弹层、导航或任务详情，根页面返回后应用进入后台。顶部设置提供外观、阅读、备份、账号及关于。
 - 列表更多菜单支持编辑、移动分区、置顶、开始、改期、子任务及删除；列表顶部更多菜单可打开回收站、导出或恢复备份。分区编辑按钮直接可见，长按仍用于排序。
@@ -24,7 +25,7 @@
 
 导航底部账号入口 → 账号与同步，使用现有邮箱验证码服务；支持首次登录的保留 / 复制离线数据选择、账号隔离、邮箱绑定、昵称、头像及退出。头像通过系统图片选择器读取，限制 PNG / JPEG / WebP、5 MB，居中裁为 128×128 PNG。选择和读取图片需安卓设备专项验收。
 
-复用 `desktop/cloud.cjs` 与 `desktop/sync-model.cjs` 的完整文档、三方合并和 CAS 版本协议。前台约十五秒重试，恢复前台时尝试同步，可手动同步；后台不承诺持续运行。冲突暂停上传，用户选择保留本机 / 云端；确认时版本变化会拒绝应用。同步不包含设备外观与阅读偏好。服务端不需要新增安卓接口，本轮未部署服务器。
+复用 `desktop/cloud.cjs` 与 `desktop/sync-model.cjs` 的完整文档、三方合并和 CAS 版本协议。登录完成切换后立即尝试首次同步，前台约十五秒重试，恢复前台时尝试同步，可手动同步；后台不承诺持续运行。切换账号时直接替换界面快照，接受不同账号之间较低的本机版本号，清除旧编辑状态；解除互斥后再启动同步，失败保持可编辑及可重试，不需要重启应用。冲突暂停上传，用户选择保留本机 / 云端；确认时版本变化会拒绝应用。同步不包含设备外观与阅读偏好。服务端不需要新增安卓接口，本轮未部署服务器。
 
 HTTPS 网络请求通过安卓平台证书校验，拒绝 HTTP 与重定向；令牌经 Android Keystore AES-GCM 加密后保存。应用内页面使用 `WebViewAssetLoader` 的本地 HTTPS 来源，桥接只开放给内置页面，阻止外部页面及资源，禁止 file URL 的跨域访问。实现参照 [Android 本地内容说明](https://developer.android.com/develop/ui/views/layout/webapps/load-local-content)。
 
@@ -42,7 +43,7 @@ npm run build:android
 
 主要入口：`android/app/src/main/java/com/toz/app/MainActivity.java` 为原生壳；`mobile/node-adapters.mjs` 为 Store / Cloud 的窄接口适配；`mobile/runtime.mjs` 为账号与存储桥接；`mobile/app.mjs`、`mobile/mobile.css` 为触控和响应式界面。Windows 继续使用 Electron，不加载安卓适配代码。
 
-定向检查：`npm run test:android` 验证安卓适配协议与共享 Store / Cloud；`npm run test:android-ui` 使用隔离 Electron 容器检查打包后的手机 / 平板页面。这两者不等同于安卓设备运行验证，Android SQLite / Keystore / 文件选择器 / 系统返回和软键盘仍需设备检查。完整测试不在默认构建范围内。
+定向检查：`npm run test:android` 验证安卓适配协议与共享 Store / Cloud；`npm run test:android-ui` 使用隔离 Electron 容器检查手机 / 平板页面；`npm run test:android-account-ui` 单独检查登录、自动 / 手动同步、断网重试、退出及账号界面替换。这些不等同于安卓设备运行验证，Android SQLite / Keystore / 文件选择器 / 系统返回和软键盘仍需设备检查。完整测试不在默认构建范围内。
 
 ## 当前边界
 
