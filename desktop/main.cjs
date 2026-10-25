@@ -5,6 +5,7 @@ const {Store}=require('./store.cjs');
 const {createStartup}=require('./startup.cjs');
 const {resizeWidgetHeight}=require('./widget-size.cjs');
 const {widgetMenuTemplate}=require('./widget-menu.cjs');
+const {cloudPresentation}=require('../prototype/cloud-status.mjs');
 const APP_ID='com.toz.desktop';
 const entryReview=process.argv.includes('--entry-ui-test');
 const cloudReview=process.argv.includes('--cloud-ui-test')||entryReview;
@@ -29,7 +30,8 @@ function startupState(){return startup.state();}
 function showMain(command){if(!workspaceReady){openEntryWindow().catch(error=>dialog.showErrorBox('ToZ',error.message));return;}if(!mainWindow)return;if(mainWindow.isMinimized())mainWindow.restore();mainWindow.show();mainWindow.focus();if(command)mainWindow.webContents.send('toz:ui-command',command);}
 function titleBarTheme(dark){return {color:dark?'#252527':'#f8f8f7',symbolColor:dark?'#f0f0f2':'#252527',height:38};}
 function applyTheme(){const dark=store.snapshot().dark;for(const window of [mainWindow,quickAddWindow,settingsWindow,entryWindow])if(window&&!window.isDestroyed()){window.setBackgroundColor(dark?'#29292c':'#ffffff');window.setTitleBarOverlay(titleBarTheme(dark));}}
-function broadcast(){applyTheme();const snapshot=store.snapshot(),cloudState=cloud?.status()||{user:null,busy:false,pending:false,error:'',lastSync:null,conflicts:[]};for(const w of [mainWindow,widgetWindow,quickAddWindow,settingsWindow])if(w&&!w.isDestroyed()){w.webContents.send('toz:state',snapshot);w.webContents.send('toz:cloud-state',cloudState);}}
+function updateTrayStatus(state=cloud?.status()){if(tray&&!tray.isDestroyed())tray.setToolTip('ToZ · '+(state?.user?cloudPresentation(state).save:'离线使用'));}
+function broadcast(){applyTheme();const snapshot=store.snapshot(),cloudState=cloud?.status()||{user:null,busy:false,pending:false,error:'',lastSync:null,conflicts:[]};updateTrayStatus(cloudState);for(const w of [mainWindow,widgetWindow,quickAddWindow,settingsWindow])if(w&&!w.isDestroyed()){w.webContents.send('toz:state',snapshot);w.webContents.send('toz:cloud-state',cloudState);}}
 function secure(window){window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('file:'))event.preventDefault();});}
 async function openEntryWindow(){
   if(entryWindow&&!entryWindow.isDestroyed()){entryWindow.show();entryWindow.focus();return;}
@@ -45,7 +47,7 @@ function enterWorkspace(show=true){
   if(!mainWindow){createWindows();if(show)mainWindow.once('ready-to-show',()=>showMain());}
   else if(show){showMain();applyWidget();}
   if(entryWindow){entryWindow.destroy();entryWindow=null;}
-  if(!smoke&&!tray){tray=new Tray(nativeImage.createFromPath(iconPath).resize({width:20,height:20}));tray.setToolTip('ToZ · 离线待办');tray.on('double-click',()=>showMain());rebuildTray();globalShortcut.register('CommandOrControl+Alt+T',()=>{if(!workspaceReady){showMain();return;}setIgnore(false);store.updateSettings({widgetVisible:true});applyWidget();});}
+  if(!smoke&&!tray){tray=new Tray(nativeImage.createFromPath(iconPath).resize({width:20,height:20}));updateTrayStatus();tray.on('double-click',()=>showMain());rebuildTray();globalShortcut.register('CommandOrControl+Alt+T',()=>{if(!workspaceReady){showMain();return;}setIgnore(false);store.updateSettings({widgetVisible:true});applyWidget();});}
 }
 async function returnToEntry(){
   workspaceReady=false;for(const window of [mainWindow,widgetWindow,settingsWindow,quickAddWindow])if(window&&!window.isDestroyed())window.hide();
@@ -242,7 +244,7 @@ function handlers(){
       case 'collapse-widget':setWidgetCollapsed(!!arg);return true;
       case 'quit':app.quit();return true;
       case 'open-data':return shell.openPath(store.directory);
-      case 'desktop-shortcut':if(!app.isPackaged)throw new Error('请使用安装版创建快捷方式');return shell.writeShortcutLink(path.join(app.getPath('desktop'),'ToZ.lnk'),{target:process.execPath,cwd:path.dirname(process.execPath),description:'ToZ 离线待办',icon:process.execPath,iconIndex:0,appUserModelId:APP_ID});
+      case 'desktop-shortcut':if(!app.isPackaged)throw new Error('请使用安装版创建快捷方式');return shell.writeShortcutLink(path.join(app.getPath('desktop'),'ToZ.lnk'),{target:process.execPath,cwd:path.dirname(process.execPath),description:'ToZ 待办与云同步',icon:process.execPath,iconIndex:0,appUserModelId:APP_ID});
       case 'export':{
         const choice=await dialog.showSaveDialog(owner,{title:'导出完整备份',defaultPath:`ToZ-备份-${new Date().toLocaleDateString('sv-SE')}.json`,filters:[{name:'ToZ 备份',extensions:['json']}]});
         if(choice.canceled)return false;
