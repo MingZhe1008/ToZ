@@ -196,9 +196,10 @@ function handlers(){
     }
     if(action==='login'){
       let importLocal=false;
-      if(store.snapshot().tasks.length||store.snapshot().recurrences.length){
-        const result=await dialog.showMessageBox(owner,{type:'question',buttons:['取消','保留在本机，进入账号','复制到账号并同步'],defaultId:0,cancelId:0,title:'首次登录的数据处理',message:'如何处理当前离线数据？',detail:'账号数据独立保存。复制仅在该账号首次建立本地副本时执行；原离线数据保留，退出账号后可继续查看。'});
-        if(result.response===0)return cloud.status();importLocal=result.response===2;
+      const local=store.snapshot();
+      if(local.tasks.length||local.recurrences.length){
+        if(!['keep','copy'].includes(arg.localDataChoice)||arg.localVersion!==local.version)return {...cloud.status(),needsLocalChoice:true,localVersion:local.version,taskCount:local.tasks.length,choiceChanged:arg.localDataChoice!==undefined};
+        importLocal=arg.localDataChoice==='copy';
       }
       return await cloud.login(arg.email,arg.code,importLocal);
     }

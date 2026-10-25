@@ -1,3 +1,4 @@
+import {loginWithDataChoice} from './login-choice.mjs';
 const api=window.toz,$=id=>document.getElementById(id);
 let working=false,nextSend=0;
 function update(){const seconds=Math.max(0,Math.ceil((nextSend-Date.now())/1000));$('entry-send-code').disabled=working||seconds>0;$('entry-send-code').textContent=seconds?`${seconds} 秒后重发`:'获取验证码';}
@@ -13,8 +14,8 @@ $('entry-send-code').addEventListener('click',()=>{
 });
 $('entry-login-form').addEventListener('submit',event=>{
   event.preventDefault();run(async()=>{
-    const result=await api.cloud('login',{email:$('entry-email').value,code:$('entry-code').value});
-    if(result.user)await api.enter('account');
+    const result=await loginWithDataChoice(api,{email:$('entry-email').value,code:$('entry-code').value});
+    if(result?.user)await api.enter('account');
   });
 });
 $('entry-offline').addEventListener('click',()=>run(()=>api.enter('offline')));

@@ -1,4 +1,5 @@
 import {cloudPresentation} from './cloud-status.mjs';
+import {loginWithDataChoice} from './login-choice.mjs';
 const api=window.toz;
 const $=id=>document.getElementById(id);
 export function refreshCloudChrome(state=api?.cloudStatus?.()){
@@ -76,7 +77,8 @@ if(api?.cloud){
       run(async()=>{await api.cloud('code',{email:input.value,purpose});cooldowns.set(purpose,Date.now()+60000);$('cloud-state').textContent='验证码已发送，请查看收件箱或垃圾邮件。';});
     });
     form.addEventListener('submit',event=>{event.preventDefault();run(async()=>{
-      const result=await api.cloud(purpose,{email:form.elements.email.value,code:form.elements.code.value});form.elements.code.value='';return result;
+      const credentials={email:form.elements.email.value,code:form.elements.code.value};
+      const result=purpose==='login'?await loginWithDataChoice(api,credentials):await api.cloud(purpose,credentials);if(result)form.elements.code.value='';return result;
     });});
   }
   function updateCooldowns(){for(const purpose of ['login','bind']){const button=document.querySelector(`[data-cloud-code="${purpose}"]`),left=Math.max(0,Math.ceil(((cooldowns.get(purpose)||0)-Date.now())/1000));button.textContent=left?`${left} 秒后重发`:'获取验证码';button.disabled=working||left>0;}}

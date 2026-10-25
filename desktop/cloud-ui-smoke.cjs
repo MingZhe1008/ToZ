@@ -16,12 +16,12 @@ module.exports=async({openSettingsWindow,getSettings,getMain,getWidget,getStore,
   for(let i=0;i<100&&!cloudTestEnv.mail.has('ui@example.com');i++)await new Promise(r=>setTimeout(r,50));
   const code=cloudTestEnv.mail.get('ui@example.com');assert(code);
   await wait("!document.querySelector('#cloud-login-form button[type=submit]').disabled");
-  const {dialog}=require('electron'),originalConfirmation=dialog.showMessageBox;
-  let confirmedImport=false;
-  dialog.showMessageBox=async(owner,options)=>{if(options.title==='首次登录的数据处理'){confirmedImport=true;return {response:2};}return originalConfirmation(owner,options);};
+  const {dialog}=require('electron');
   await js(`document.querySelector('#cloud-login-form').elements.code.value=${JSON.stringify(code)};document.querySelector('#cloud-login-form').requestSubmit()`);
+  await wait("document.querySelector('#login-data-choice')?.open");
+  await js("document.querySelector('#login-data-choice input[value=copy]').click();document.querySelector('#login-data-choice form').requestSubmit()");
   await wait("!document.querySelector('#cloud-signed-in').hidden");
-  dialog.showMessageBox=originalConfirmation;assert(confirmedImport);await cloud.sync();
+  await cloud.sync();
   assert.equal(getStore().snapshot().tasks[0].title,'原离线任务');
   assert(cloud.user);assert.notEqual(getStore().directory,path.dirname(getStore().directory));
   const mainJS=code=>getMain().webContents.executeJavaScript(code,true);

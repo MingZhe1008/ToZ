@@ -1,7 +1,6 @@
 const fs=require('node:fs');
 const path=require('node:path');
 const assert=require('node:assert/strict');
-const {dialog}=require('electron');
 const {createTask}=require('../prototype/domain.mjs');
 const {Cloud}=require('./cloud.cjs');
 module.exports=async({getEntry,getMain,getWidget,getStore,returnToEntry,cloud,cloudTestEnv,outputDirectory})=>{
@@ -22,20 +21,34 @@ module.exports=async({getEntry,getMain,getWidget,getStore,returnToEntry,cloud,cl
   await entryJS("document.querySelector('#entry-email').value='entry@example.com';document.querySelector('#entry-send-code').click()");
   await wait(()=>cloudTestEnv.mail.has('entry@example.com'));
   await wait(()=>entryJS("!document.querySelector('#entry-login').disabled"));
-  const originalConfirmation=dialog.showMessageBox;let copied=false;
-  dialog.showMessageBox=async(owner,options)=>{if(options.title==='首次登录的数据处理'){copied=true;return {response:2};}return originalConfirmation(owner,options);};
-  try{
-    await entryJS(`document.querySelector('#entry-code').value=${JSON.stringify(cloudTestEnv.mail.get('entry@example.com'))};document.querySelector('#entry-login-form').requestSubmit()`);
-    await wait(()=>!getEntry()&&cloud.user&&getMain().isVisible());
-  }finally{dialog.showMessageBox=originalConfirmation;}
-  assert(copied);await cloud.sync();assert.equal(getStore().snapshot().tasks[0].title,'保留原离线任务');
+  await entryJS(`document.querySelector('#entry-code').value=${JSON.stringify(cloudTestEnv.mail.get('entry@example.com'))};document.querySelector('#entry-login-form').requestSubmit()`);
+  await wait(()=>entryJS("document.querySelector('#login-data-choice')?.open"));
+  assert.equal(cloud.user,null);assert.equal(await entryJS("document.querySelector('#login-data-choice [data-choice-continue]').disabled"),true);
+  await new Promise(resolve=>setTimeout(resolve,150));fs.writeFileSync(path.join(outputDirectory,'data-choice-dark.png'),(await getEntry().webContents.capturePage()).toPNG());
+  await entryJS("document.documentElement.dataset.theme='light'");await new Promise(resolve=>setTimeout(resolve,150));fs.writeFileSync(path.join(outputDirectory,'data-choice-light.png'),(await getEntry().webContents.capturePage()).toPNG());
+  await entryJS("document.querySelector('#login-data-choice .login-choice-actions [data-choice-cancel]').click()");
+  await wait(()=>entryJS("!document.querySelector('#entry-login').disabled"));assert.equal(cloud.user,null);assert.equal(getStore().snapshot().tasks.length,1);
+  await entryJS("document.querySelector('#entry-login-form').requestSubmit()");await wait(()=>entryJS("document.querySelector('#login-data-choice')?.open"));
+  await entryJS("document.querySelector('#login-data-choice input[value=copy]').click();document.querySelector('#login-data-choice form').requestSubmit()");
+  await wait(()=>!getEntry()&&cloud.user&&getMain().isVisible());
+  await cloud.sync();assert.equal(getStore().snapshot().tasks[0].title,'保留原离线任务');
   // Loading a saved Windows-encrypted session supplies a user before the startup decision.
   const {safeStorage}=require('electron');let restoredId;
   const restored=new Cloud({directory:cloud.directory,getStore,switchProfile:id=>restoredId=id,seal:v=>safeStorage.encryptString(v).toString('base64'),unseal:v=>safeStorage.decryptString(Buffer.from(v,'base64'))});
   assert.equal(restored.user.id,cloud.user.id);assert.equal(restoredId,cloud.user.id);
   await getMain().webContents.executeJavaScript("window.toz.cloud('logout')",true);
   assert(getEntry()?.isVisible());assert(!getMain().isVisible());assert(!getWidget().isVisible());assert.equal(cloud.user,null);
+  await entryJS("document.querySelector('#entry-email').value='entry-keep@example.com';document.querySelector('#entry-send-code').click()");
+  await wait(()=>cloudTestEnv.mail.has('entry-keep@example.com'));await wait(()=>entryJS("!document.querySelector('#entry-login').disabled"));
+  await entryJS(`document.querySelector('#entry-code').value=${JSON.stringify(cloudTestEnv.mail.get('entry-keep@example.com'))};document.querySelector('#entry-login-form').requestSubmit()`);
+  await wait(()=>entryJS("document.querySelector('#login-data-choice')?.open"));
+  const changed=getStore().snapshot();changed.tasks[0].note='选择期间更新';getStore().commit(changed,changed.version);
+  await entryJS("document.querySelector('#login-data-choice input[value=keep]').click();document.querySelector('#login-data-choice form').requestSubmit()");
+  await wait(()=>entryJS("document.querySelector('#login-data-choice')?.open && document.querySelector('#login-data-choice [data-choice-continue]').disabled"));assert.equal(cloud.user,null);
+  await entryJS("document.querySelector('#login-data-choice input[value=keep]').click();document.querySelector('#login-data-choice form').requestSubmit()");
+  await wait(()=>!getEntry()&&cloud.user&&getMain().isVisible());await cloud.sync();assert.equal(getStore().snapshot().tasks.length,0);
+  await getMain().webContents.executeJavaScript("window.toz.cloud('logout')",true);
   await entryJS("document.querySelector('#entry-offline').click()");await wait(()=>!getEntry()&&getMain().isVisible());
   assert.equal(getStore().snapshot().tasks[0].title,'保留原离线任务');
-  return {ok:true,checks:['未选择前只有启动窗口，未创建主窗或浮窗','离线选择后进入任务界面','启动窗口验证码登录','首次复制离线数据','保存会话可在启动前恢复','退出账号返回启动选择','退出后再次离线使用'],realEmailSent:false};
+  return {ok:true,checks:['未选择前只有启动窗口，未创建主窗或浮窗','离线选择后进入任务界面','启动窗口验证码登录','主题一致的数据选择弹层','未选择时不能继续','取消不登录且不复制','同一验证码取消后仍可继续','首次复制离线数据','选择期间本机更新要求重新确认','保留本机分支不复制离线任务','保存会话可在启动前恢复','退出账号返回启动选择','退出后再次离线使用'],realEmailSent:false};
 };
