@@ -35,7 +35,7 @@ export function mountDesktopSettings(toast,{setReading}={}){
     ['startMinimized','自启动时收至托盘','保留浮窗，不弹出主界面'],
     ['closeToTray','关闭主窗口时收至托盘','从托盘选择“退出 ToZ”才会完全退出'],
     ['widgetVisible','显示桌面浮窗','在桌面查看今日与遗留待办'],
-    ['widgetPinned','窗口始终置顶','仅控制浮窗窗口，不改变任务置顶']
+    ['widgetPinned','窗口始终置顶','默认关闭：常驻桌面底层，显示桌面时保留；开启后覆盖其他应用']
   ].map(([key,title,note])=>`<div class="setting-row"><div><b>${title}</b><small>${note}</small></div><label class="native-switch"><input type="checkbox" data-preference="${key}" aria-label="${title}"><span></span></label></div>`).join('');
   dialog.querySelector('.browser-only-note')?.remove();
   dialog.querySelector('.reset-button')?.remove();

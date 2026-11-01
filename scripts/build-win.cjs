@@ -2,6 +2,7 @@ const {spawnSync}=require('node:child_process');
 const path=require('node:path');
 const fs=require('node:fs');
 const root=path.resolve(__dirname,'..');
+require('./build-desktop-layer.cjs').buildDesktopLayer();
 const zip=require('7zip-bin').path7za;
 if(!fs.existsSync(path.join(root,'node_modules/electron/dist/electron.exe'))){console.error('缺少 Electron 运行时，请运行 npm run install:runtime');process.exit(1);}
 const env={...process.env,ELECTRON_BUILDER_7ZIP_PATH:zip};

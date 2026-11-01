@@ -5,6 +5,7 @@ const {Store}=require('./store.cjs');
 const {createStartup}=require('./startup.cjs');
 const {resizeWidgetHeight}=require('./widget-size.cjs');
 const {widgetMenuTemplate}=require('./widget-menu.cjs');
+const {createDesktopLayer}=require('./desktop-layer.cjs');
 const {cloudPresentation}=require('../prototype/cloud-status.mjs');
 const APP_ID='com.toz.desktop';
 const entryReview=process.argv.includes('--entry-ui-test');
@@ -17,6 +18,7 @@ if(uiReview&&(!dataArg||!path.resolve(dataArg.slice(11)).startsWith(path.resolve
 if(dataArg)app.setPath('userData',path.resolve(dataArg.slice(11)));
 app.setName('ToZ');app.setAppUserModelId(APP_ID);
 let mainWindow,widgetWindow,quickAddWindow,settingsWindow,entryWindow,tray,store,startup,cloud,quitting=false,widgetIgnore=false,workspaceReady=false;
+let desktopLayer;
 const rendererReports=new Map();
 const miniSamples=new Set();
 const iconPath=path.join(__dirname,'..','build','icon.png');
@@ -50,7 +52,7 @@ function enterWorkspace(show=true){
   if(!smoke&&!tray){tray=new Tray(nativeImage.createFromPath(iconPath).resize({width:20,height:20}));updateTrayStatus();tray.on('double-click',()=>showMain());rebuildTray();globalShortcut.register('CommandOrControl+Alt+T',()=>{if(!workspaceReady){showMain();return;}setIgnore(false);store.updateSettings({widgetVisible:true});applyWidget();});}
 }
 async function returnToEntry(){
-  workspaceReady=false;for(const window of [mainWindow,widgetWindow,settingsWindow,quickAddWindow])if(window&&!window.isDestroyed())window.hide();
+  workspaceReady=false;desktopLayer?.apply({...store.settings(),widgetVisible:false});for(const window of [mainWindow,widgetWindow,settingsWindow,quickAddWindow])if(window&&!window.isDestroyed())window.hide();
   await openEntryWindow();
 }
 function fitBounds(bounds,fallback){
@@ -68,13 +70,18 @@ function createWindows(){
   mainWindow=new BrowserWindow({...fitBounds(store.meta('mainBounds',null),{width:Math.min(1200,primary.width-24),height:Math.min(820,primary.height-24)}),minWidth:960,minHeight:600,title:'ToZ',titleBarStyle:'hidden',titleBarOverlay:{color:'#f2f2f7',symbolColor:'#1d1d1f',height:34},icon:iconPath,backgroundColor:'#ffffff',show:false,autoHideMenuBar:true,webPreferences:common});
   widgetWindow=new BrowserWindow({...fitBounds(store.meta('widgetBounds',null),{x:primary.x+primary.width-356,y:primary.y+80,width:336,height:550}),minWidth:280,maxWidth:480,minHeight:64,maxHeight:900,frame:false,maximizable:false,transparent:true,backgroundColor:'#00000000',hasShadow:false,show:false,skipTaskbar:true,resizable:true,alwaysOnTop:store.settings().widgetPinned,icon:iconPath,webPreferences:{...common,additionalArguments:[...(common.additionalArguments||[]),'--toz-widget']}});
   secure(mainWindow);secure(widgetWindow);
+  if(process.platform==='win32'&&!smoke){
+    desktopLayer=createDesktopLayer(widgetWindow,{executable:app.isPackaged?path.join(process.resourcesPath,'native','toz-desktop-layer.exe'):undefined,onError:message=>{console.error(message);if(!quitting)dialog.showErrorBox('桌面浮窗控制失败',message);}});
+    widgetWindow.on('closed',()=>{desktopLayer?.dispose();desktopLayer=null;});
+    widgetWindow.on('focus',()=>{if(!store.settings().widgetPinned)desktopLayer?.apply({...store.settings(),widgetVisible:workspaceReady&&store.settings().widgetVisible});});
+  }
   // Drag regions receive non-client mouse messages instead of DOM dblclick.
   widgetWindow.hookWindowMessage(0x00A3,wParam=>{if(wParam.readUInt32LE(0)===2)setImmediate(()=>setWidgetCollapsed(!store.settings().widgetCollapsed));});
   applyTheme();
   mainWindow.loadFile(path.join(__dirname,'..','prototype','index.html'));
   widgetWindow.loadFile(path.join(__dirname,'..','prototype','index.html'));
   mainWindow.on('close',event=>{if(!quitting){event.preventDefault();if(store.settings().closeToTray)mainWindow.hide();else app.quit();}});
-  widgetWindow.on('close',event=>{if(!quitting){event.preventDefault();store.updateSettings({widgetVisible:false});widgetWindow.hide();rebuildTray();}});
+  widgetWindow.on('close',event=>{if(!quitting){event.preventDefault();store.updateSettings({widgetVisible:false});applyWidget();rebuildTray();}});
   let timer;
   const remember=()=>{clearTimeout(timer);timer=setTimeout(()=>{if(!quitting){if(!mainWindow.isMinimized()&&!mainWindow.isMaximized())store.setMeta('mainBounds',mainWindow.getBounds());store.setMeta('widgetBounds',widgetWindow.getBounds());}},350);};
   for(const w of [mainWindow,widgetWindow]){w.on('move',remember);w.on('resize',remember);}
@@ -119,7 +126,7 @@ async function openSettingsWindow(tab='appearance'){
   try{await window.loadFile(path.join(__dirname,'..','prototype','index.html'),{query:{tab:selected}});}catch(error){if(!window.isDestroyed())window.destroy();throw error;}
   if(!window.isDestroyed()){window.setTitle('ToZ 设置');window.show();window.focus();}return true;
 }
-function applyWidget(){if(!widgetWindow)return;if(!workspaceReady){widgetWindow.hide();return;}const settings=store.settings();widgetWindow.setAlwaysOnTop(settings.widgetPinned);if(!smoke){if(settings.widgetVisible)widgetWindow.showInactive();else widgetWindow.hide();}if(settings.widgetCollapsed)resizeWidgetHeight(widgetWindow,68);}
+function applyWidget(){if(!widgetWindow)return;const settings={...store.settings(),widgetVisible:workspaceReady&&store.settings().widgetVisible};if(!settings.widgetVisible)desktopLayer?.apply(settings);if(!workspaceReady){widgetWindow.hide();return;}widgetWindow.setAlwaysOnTop(settings.widgetPinned);if(!smoke){if(settings.widgetVisible)widgetWindow.showInactive();else widgetWindow.hide();}desktopLayer?.apply(settings);if(settings.widgetCollapsed)resizeWidgetHeight(widgetWindow,68);}
 function rebuildTray(){if(!tray)return;const settings=store.settings();tray.setContextMenu(Menu.buildFromTemplate([
   {label:'打开 ToZ',click:()=>showMain()},
   {label:settings.widgetVisible?'隐藏桌面浮窗':'显示桌面浮窗',click:()=>{store.updateSettings({widgetVisible:!settings.widgetVisible});applyWidget();rebuildTray();broadcast();}},
@@ -129,7 +136,7 @@ function rebuildTray(){if(!tray)return;const settings=store.settings();tray.setC
   {type:'separator'},{label:'退出 ToZ',click:()=>app.quit()}
 ]));}
 function setIgnore(value){widgetIgnore=value;widgetWindow.setIgnoreMouseEvents(value,{forward:true});rebuildTray();}
-function toggleWidget(){if(!workspaceReady){showMain();return false;}const visible=!store.settings().widgetVisible;store.updateSettings({widgetVisible:visible});if(visible)setIgnore(false);applyWidget();if(visible){widgetWindow.showInactive();widgetWindow.moveTop();}rebuildTray();broadcast();return visible;}
+function toggleWidget(){if(!workspaceReady){showMain();return false;}const visible=!store.settings().widgetVisible;store.updateSettings({widgetVisible:visible});if(visible)setIgnore(false);applyWidget();if(visible&&store.settings().widgetPinned)widgetWindow.moveTop();rebuildTray();broadcast();return visible;}
 function setWidgetCollapsed(value){
   if(value&&widgetWindow.getContentSize()[1]>100)store.setMeta('widgetExpandedHeight',widgetWindow.getContentSize()[1]);
   store.updateSettings({widgetCollapsed:!!value});
@@ -240,7 +247,7 @@ function handlers(){
       }
       case 'close-quick-add':quickAddWindow?.close();return true;
       case 'toggle-widget':toggleWidget();return true;
-      case 'show-widget':store.updateSettings({widgetVisible:true});setIgnore(false);applyWidget();widgetWindow.showInactive();widgetWindow.moveTop();rebuildTray();broadcast();return true;
+      case 'show-widget':store.updateSettings({widgetVisible:true});setIgnore(false);applyWidget();if(store.settings().widgetPinned)widgetWindow.moveTop();rebuildTray();broadcast();return true;
       case 'hide-widget':store.updateSettings({widgetVisible:false});applyWidget();rebuildTray();broadcast();return true;
       case 'click-through':setIgnore(!!arg);return true;
       case 'collapse-widget':setWidgetCollapsed(!!arg);return true;
@@ -283,7 +290,7 @@ async function start(){
   Menu.setApplicationMenu(null);handlers();
   if((!smoke||entryReview)&&!cloud?.user)await openEntryWindow();else enterWorkspace(false);
   if(cloud?.user)cloud.sync();
-  app.on('before-quit',()=>{quitting=true;});
+  app.on('before-quit',()=>{quitting=true;desktopLayer?.dispose();});
   app.on('will-quit',()=>{globalShortcut.unregisterAll();store.close();});
   if(cloudReview){
     try{

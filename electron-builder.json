@@ -4,6 +4,7 @@
   "directories":{"output":"dist","buildResources":"build"},
   "files":["desktop/**","prototype/**","build/icon.png","package.json","!prototype/*.test.mjs","!desktop/*.test.cjs"],
   "asar":true,
+  "extraResources":[{"from":".runtime/native/toz-desktop-layer.exe","to":"native/toz-desktop-layer.exe"}],
   "electronDist":"node_modules/electron/dist",
   "afterPack":"build/after-pack.mjs",
   "npmRebuild":false,

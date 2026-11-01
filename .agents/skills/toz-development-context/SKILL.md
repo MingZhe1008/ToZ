@@ -21,6 +21,7 @@ description: 在 ToZ 项目的新会话开始开发或继续开发时，读取�
 
 | 任务 | 补读文档 | 实现入口（相对仓库根目录） |
 | --- | --- | --- |
+| Windows 桌面常驻、显示桌面与浮窗层级 | Windows 安装说明 v1.1.6、需求第 31 节、视觉规范 | `desktop/desktop-layer.cjs` / `.cs`、`desktop/main.cjs`、`scripts/build-desktop-layer.cjs`、打包 extraResources；定向 `npm run test:desktop-layer`，只用隔离窗口 |
 | 正式网页版、浏览器存储、腾讯云网页发布 | [网页版使用与部署说明](../../../docs/网页版使用与部署说明.md)、云同步部署说明、需求第 30 节、视觉规范 | `web/`、`scripts/build-web.mjs`、`scripts/activate-web.sh`、`sync-server/deploy/nginx.conf`；共用 Store / Cloud 和原型业务界面 |
 | Android 手机 / 平板、APK、移动端同步与布局 | [Android 安装与开发说明](../../../docs/Android安装与开发说明.md)、需求第 29 节、视觉规范、云同步部署说明 | `android/`、`mobile/`、`scripts/prepare-android.mjs`、`scripts/build-android.mjs`；共用 `prototype/` 和 `desktop/store.cjs` / `cloud.cjs` |
 | 任务日期、延期、完成、子任务 | 开发需求中的日期规则、核心流程、数据结构及最新补充 | `prototype/domain.mjs`、`prototype/lifecycle.mjs`、`prototype/app.mjs` 及对应测试 |
