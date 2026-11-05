@@ -21,6 +21,7 @@ description: 在 ToZ 项目的新会话开始开发或继续开发时，读取�
 
 | 任务 | 补读文档 | 实现入口（相对仓库根目录） |
 | --- | --- | --- |
+| Windows 启动恢复账号、本机设置重启保留 | Windows 安装说明 v1.1.7、验证记录 | `desktop/profile-store.cjs`、`desktop/main.cjs`、`prototype/desktop-ui.mjs`；定向 `npm run test:profile-settings`，界面 `--pin-settings-test` 必须配独立 `.runtime/` 数据目录 |
 | Windows 桌面常驻、显示桌面与浮窗层级 | Windows 安装说明 v1.1.6、需求第 31 节、视觉规范 | `desktop/desktop-layer.cjs` / `.cs`、`desktop/main.cjs`、`scripts/build-desktop-layer.cjs`、打包 extraResources；定向 `npm run test:desktop-layer`，只用隔离窗口 |
 | 网页域名 / HTTPS / 跳转 | 网页版说明的域名配置、云同步部署说明 | `sync-server/deploy/nginx-domain.conf` 与 `nginx.conf`；保留 IP 443 的 default_server、原生客户端 IP 地址及两份证书续期，域名为 `www.lyy12.cn` |
 | 正式网页版、浏览器存储、腾讯云网页发布 | [网页版使用与部署说明](../../../docs/网页版使用与部署说明.md)、云同步部署说明、需求第 30 节、视觉规范 | `web/`、`scripts/build-web.mjs`、`scripts/activate-web.sh`、`sync-server/deploy/nginx.conf`；共用 Store / Cloud 和原型业务界面 |

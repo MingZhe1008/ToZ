@@ -2,6 +2,7 @@ const {app,BrowserWindow,ipcMain,Tray,Menu,nativeImage,screen,dialog,shell,globa
 const fs=require('node:fs');
 const path=require('node:path');
 const {Store}=require('./store.cjs');
+const {openProfileStore}=require('./profile-store.cjs');
 const {createStartup}=require('./startup.cjs');
 const {resizeWidgetHeight}=require('./widget-size.cjs');
 const {widgetMenuTemplate}=require('./widget-menu.cjs');
@@ -11,7 +12,8 @@ const APP_ID='com.toz.desktop';
 const entryReview=process.argv.includes('--entry-ui-test');
 const cloudReview=process.argv.includes('--cloud-ui-test')||entryReview;
 const systemReview=process.argv.includes('--ui-system-test');
-const uiReview=process.argv.includes('--ui-v1-test')||systemReview||cloudReview;
+const pinSettingsReview=process.argv.includes('--pin-settings-test');
+const uiReview=process.argv.includes('--ui-v1-test')||systemReview||cloudReview||pinSettingsReview;
 const smoke=process.argv.includes('--smoke-test')||uiReview;
 const dataArg=process.argv.find(a=>a.startsWith('--toz-data='));
 if(uiReview&&(!dataArg||!path.resolve(dataArg.slice(11)).startsWith(path.resolve('.runtime')+path.sep)))throw new Error('界面定向验收必须使用工作目录 .runtime 下的独立数据目录');
@@ -19,6 +21,7 @@ if(dataArg)app.setPath('userData',path.resolve(dataArg.slice(11)));
 app.setName('ToZ');app.setAppUserModelId(APP_ID);
 let mainWindow,widgetWindow,quickAddWindow,settingsWindow,entryWindow,tray,store,startup,cloud,quitting=false,widgetIgnore=false,workspaceReady=false;
 let desktopLayer;
+let restoringCloudSession=false;
 const rendererReports=new Map();
 const miniSamples=new Set();
 const iconPath=path.join(__dirname,'..','build','icon.png');
@@ -146,12 +149,7 @@ function trusted(event){return [mainWindow,widgetWindow,quickAddWindow,settingsW
 function editable(){if(!workspaceReady)throw new Error('请先登录账号或选择离线使用');if(cloud?.busyWrite)throw new Error('正在保存同步结果，请稍后重试');}
 function switchProfile(id,importLocal){
   const directory=id?path.join(app.getPath('userData'),'accounts',require('node:crypto').createHash('sha256').update(id).digest('hex')):app.getPath('userData');
-  const old=store,current=old.snapshot(),next=new Store(directory);
-  try{
-    if(id&&importLocal&&next.snapshot().version===0)next.restore(current);
-    next.setMeta('settings',current.settings);next.setMeta('dark',current.dark);next.setMeta('opacity',current.opacity);
-    next.setMeta('version',Math.max(next.snapshot().version,current.version)+1);
-  }catch(error){next.close();throw error;}
+  const old=store,next=openProfileStore(old,directory,{importLocal:!!id&&importLocal,restoreSession:restoringCloudSession});
   store=next;old.close();
   quickAddWindow?.close();
   for(const w of [mainWindow,widgetWindow,quickAddWindow,settingsWindow])if(w&&!w.isDestroyed())w.webContents.send('toz:profile');
@@ -281,7 +279,10 @@ async function start(){
     await new Promise(resolve=>service.server.listen(0,'127.0.0.1',resolve));
     cloudTestEnv={mail,service,url:'http://127.0.0.1:'+service.server.address().port};
   }
-  if(!smoke||cloudReview)cloud=new (require('./cloud.cjs').Cloud)({directory:app.getPath('userData'),getStore:()=>store,switchProfile,url:cloudTestEnv?.url,seal:token=>{if(!safeStorage.isEncryptionAvailable())throw new Error('Windows 凭据加密不可用');return safeStorage.encryptString(token).toString('base64');},unseal:token=>safeStorage.decryptString(Buffer.from(token,'base64')),notify:()=>{if(mainWindow)broadcast();}});
+  restoringCloudSession=true;
+  try{
+    if(!smoke||cloudReview)cloud=new (require('./cloud.cjs').Cloud)({directory:app.getPath('userData'),getStore:()=>store,switchProfile,url:cloudTestEnv?.url,seal:token=>{if(!safeStorage.isEncryptionAvailable())throw new Error('Windows 凭据加密不可用');return safeStorage.encryptString(token).toString('base64');},unseal:token=>safeStorage.decryptString(Buffer.from(token,'base64')),notify:()=>{if(mainWindow)broadcast();}});
+  }finally{restoringCloudSession=false;}
   const recurrenceTimer=setInterval(()=>{try{if(!cloud?.busyWrite&&store.ensureRecurring())broadcast();}catch(error){console.error('周期排期：'+error.message);}},30000);
   const cloudTimer=setInterval(()=>{if(!quitting)cloud?.sync();},15000);
   app.on('will-quit',()=>clearInterval(cloudTimer));
@@ -303,7 +304,7 @@ async function start(){
     const resultPath=path.resolve(smokeResult||'artifacts/ui-v1/result.json');fs.mkdirSync(path.dirname(resultPath),{recursive:true});
     try{
       await Promise.all([mainWindow,widgetWindow].map(w=>w.webContents.isLoading()?new Promise(resolve=>w.webContents.once('did-finish-load',resolve)):null));
-      const result=await require(systemReview?'./ui-system-smoke.cjs':'./ui-v1-smoke.cjs')({store,mainWindow,widgetWindow,getQuickAdd:()=>quickAddWindow,getSettings:()=>settingsWindow,broadcast,outputDirectory:path.dirname(resultPath)});
+      const result=await require(pinSettingsReview?'./pin-settings-smoke.cjs':systemReview?'./ui-system-smoke.cjs':'./ui-v1-smoke.cjs')({store,mainWindow,widgetWindow,getQuickAdd:()=>quickAddWindow,getSettings:()=>settingsWindow,openSettingsWindow,broadcast,outputDirectory:path.dirname(resultPath)});
       fs.writeFileSync(resultPath,JSON.stringify({version:app.getVersion(),ok:true,...result},null,2));app.quit();
     }catch(error){fs.writeFileSync(resultPath,JSON.stringify({version:app.getVersion(),ok:false,error:error.stack},null,2));app.exit(1);}
     return;

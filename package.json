@@ -5,7 +5,7 @@
   "author": "ToZ",
   "license": "UNLICENSED",
   "main": "desktop/main.cjs",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,9 +19,10 @@
     "test:android": "node --test mobile/runtime.test.mjs",
     "test:android-ui": "node scripts/prepare-android.mjs && electron mobile/ui-smoke.cjs",
     "test:android-account-ui": "node scripts/prepare-android.mjs && electron mobile/account-ui-smoke.cjs",
-    "test": "node --test prototype/domain.test.mjs prototype/task-list.test.mjs desktop/store.test.cjs desktop/startup.test.cjs prototype/gantt.test.mjs prototype/recurrence.test.mjs prototype/planning.test.mjs prototype/lifecycle.test.mjs prototype/trash.test.mjs desktop/reading-settings.test.cjs desktop/widget-menu.test.cjs desktop/cloud.test.cjs",
+    "test": "node --test prototype/domain.test.mjs prototype/task-list.test.mjs desktop/store.test.cjs desktop/startup.test.cjs prototype/gantt.test.mjs prototype/recurrence.test.mjs prototype/planning.test.mjs prototype/lifecycle.test.mjs prototype/trash.test.mjs desktop/reading-settings.test.cjs desktop/profile-store.test.cjs desktop/widget-menu.test.cjs desktop/cloud.test.cjs",
     "test:cloud": "node --test desktop/cloud.test.cjs desktop/store.test.cjs desktop/reading-settings.test.cjs",
     "test:desktop-layer": "electron desktop/desktop-layer-smoke.cjs",
+    "test:profile-settings": "node --test desktop/profile-store.test.cjs desktop/reading-settings.test.cjs",
     "smoke": "electron . --smoke-test --toz-data=.runtime/smoke --smoke-result=artifacts/desktop-smoke/result.json"
   },
   "devDependencies": {
